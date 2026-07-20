@@ -1,5 +1,27 @@
 # Changelog
 
+## 3.3.1
+
+Simplified the wrench chunk-loader border from 3.3.0, per feedback: it was
+drawing the loader's full *configured* radius, which turned out to be
+misleading rather than useful, since radius is only ever tracked as one
+global admin setting (not per-loader) - if the admin changes that setting
+later, the border would show the new default, not what this specific
+loader is actually keeping loaded.
+
+### Changed
+
+- `showChunkLoaderBorder()` now always draws just the single 16x16 chunk
+  the block sits in, full stop - no radius, no reading the global config
+  at all, and no dependency on whether the loader is currently active.
+  `ChunkLoaderCore.js`'s `manager` export (added in 3.3.0 solely for this)
+  was removed again, since nothing needs it anymore - keeps the
+  modification footprint on the merged GPL file as small as possible.
+- Verified with an isolated test: the border always bounds exactly the
+  loader's own chunk, and `ChunkLoaderCore.js` no longer exposes `manager`
+  to `main.js` at all, confirming the border can't read global radius
+  even if something tried to.
+
 ## 3.3.0 - Renamed to Warehouse Utilities
 
 A larger change than a normal patch: this add-on is renamed from "Wireless

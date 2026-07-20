@@ -10,7 +10,7 @@ import { runSelfTests } from "./selfTest.js";
 // destination loaders above). Self-contained: it registers all of its own
 // event subscriptions at import time, so a side-effect import is all that's
 // needed to wire it in. GPL-3.0-or-later, by Rob 'myGen' Hall - see LICENSE.
-import { manager as mygenChunkLoaderManager } from "./ChunkLoaderCore.js";
+import "./ChunkLoaderCore.js";
 
 const DIMENSION_NAMES = ["overworld", "nether", "the_end"];
 
@@ -599,13 +599,13 @@ world.beforeEvents.playerInteractWithBlock.subscribe((ev) => {
     });
   }
 
-  // Holding the wrench and interacting with a myGen chunk loader shows its
-  // current loaded-chunk radius as a particle border, so its actual reach
-  // is visible at a glance instead of having to remember/guess it.
+  // Holding the wrench and interacting with a myGen chunk loader shows the
+  // border of the single chunk it sits in - not its configured radius
+  // (see showChunkLoaderBorder for why), and regardless of whether it's
+  // currently active.
   if (itemStack?.typeId === WRENCH_ID && block.typeId === "chunkloader:chunk_loader") {
     system.run(() => {
-      const radius = mygenChunkLoaderManager.getConfig().defaultRadius ?? 4;
-      showChunkLoaderBorder(block, radius);
+      showChunkLoaderBorder(block);
     });
   }
 });
@@ -1399,19 +1399,23 @@ world.beforeEvents.playerBreakBlock.subscribe((ev) => {
 });
 
 /**
- * Draws the actual loaded-chunk boundary around a placed myGen chunk
- * loader block, so its reach (radius is in chunks, not blocks) is visible
- * at a glance. radiusChunks=0 draws just the loader's own 16x16 chunk.
+ * Draws a border around just the single 16x16 chunk a placed myGen chunk
+ * loader block sits in - not its configured radius. Radius is only ever
+ * tracked as one global admin setting, not per-loader, so showing it here
+ * would just display whatever the *current* global default happens to be,
+ * not what this specific loader is actually keeping loaded - misleading
+ * rather than useful. This never depends on the loader's active/inactive
+ * state either: it's just "here's the chunk this block is in".
  */
-function showChunkLoaderBorder(block, radiusChunks) {
+function showChunkLoaderBorder(block) {
   const dim = block.dimension;
   const loc = block.location;
   const chunkX = Math.floor(loc.x / 16);
   const chunkZ = Math.floor(loc.z / 16);
-  const minX = (chunkX - radiusChunks) * 16;
-  const maxX = (chunkX + radiusChunks) * 16 + 15;
-  const minZ = (chunkZ - radiusChunks) * 16;
-  const maxZ = (chunkZ + radiusChunks) * 16 + 15;
+  const minX = chunkX * 16;
+  const maxX = chunkX * 16 + 15;
+  const minZ = chunkZ * 16;
+  const maxZ = chunkZ * 16 + 15;
   const y = loc.y + 1.2;
   const step = 4;
 
