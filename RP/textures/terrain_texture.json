@@ -2,6 +2,12 @@
 	"texture_data": {
 	  "wireless_hopper": {
 		  "textures": "textures/blocks/wirless_hopper.png"
+	  },
+	  "chunk_loader_active": {
+		  "textures": "textures/blocks/chunk_loader_active"
+	  },
+	  "chunk_loader_inactive": {
+		  "textures": "textures/blocks/chunk_loader_inactive"
 	  }
   }
 }

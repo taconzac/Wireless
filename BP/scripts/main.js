@@ -5,6 +5,13 @@ import { addItemsToInventory } from "./InventoryUtils.js";
 import { formatRouteEntry, parseRouteEntry, shortDimName } from "./RouteEntry.js";
 import { runSelfTests } from "./selfTest.js";
 
+// myGen's Chunk Loader, bundled in as its own player-placeable block/item
+// (separate from Wireless Hopper's own invisible, automatic wr:chunk_loader
+// destination loaders above). Self-contained: it registers all of its own
+// event subscriptions at import time, so a side-effect import is all that's
+// needed to wire it in. GPL-3.0-or-later, by Rob 'myGen' Hall - see LICENSE.
+import { manager as mygenChunkLoaderManager } from "./ChunkLoaderCore.js";
+
 const DIMENSION_NAMES = ["overworld", "nether", "the_end"];
 
 // Constants
@@ -589,6 +596,16 @@ world.beforeEvents.playerInteractWithBlock.subscribe((ev) => {
           showRangeBorder(h, range);
         }
       }
+    });
+  }
+
+  // Holding the wrench and interacting with a myGen chunk loader shows its
+  // current loaded-chunk radius as a particle border, so its actual reach
+  // is visible at a glance instead of having to remember/guess it.
+  if (itemStack?.typeId === WRENCH_ID && block.typeId === "chunkloader:chunk_loader") {
+    system.run(() => {
+      const radius = mygenChunkLoaderManager.getConfig().defaultRadius ?? 4;
+      showChunkLoaderBorder(block, radius);
     });
   }
 });
@@ -1380,6 +1397,42 @@ world.beforeEvents.playerBreakBlock.subscribe((ev) => {
     }
   }
 });
+
+/**
+ * Draws the actual loaded-chunk boundary around a placed myGen chunk
+ * loader block, so its reach (radius is in chunks, not blocks) is visible
+ * at a glance. radiusChunks=0 draws just the loader's own 16x16 chunk.
+ */
+function showChunkLoaderBorder(block, radiusChunks) {
+  const dim = block.dimension;
+  const loc = block.location;
+  const chunkX = Math.floor(loc.x / 16);
+  const chunkZ = Math.floor(loc.z / 16);
+  const minX = (chunkX - radiusChunks) * 16;
+  const maxX = (chunkX + radiusChunks) * 16 + 15;
+  const minZ = (chunkZ - radiusChunks) * 16;
+  const maxZ = (chunkZ + radiusChunks) * 16 + 15;
+  const y = loc.y + 1.2;
+  const step = 4;
+
+  const safeSpawn = (id, particleLoc) => {
+    if (particleLoc.y < -64 || particleLoc.y > 320) return;
+    try {
+      dim.spawnParticle(id, particleLoc);
+    } catch (e) {}
+  };
+
+  try {
+    for (let x = minX; x <= maxX; x += step) {
+      safeSpawn("minecraft:endrod", { x, y, z: minZ });
+      safeSpawn("minecraft:endrod", { x, y, z: maxZ });
+    }
+    for (let z = minZ; z <= maxZ; z += step) {
+      safeSpawn("minecraft:endrod", { x: minX, y, z });
+      safeSpawn("minecraft:endrod", { x: maxX, y, z });
+    }
+  } catch (e) {}
+}
 
 function showRangeBorder(entity, range) {
   if (!entity) return;

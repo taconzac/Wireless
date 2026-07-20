@@ -1,0 +1,71 @@
+{
+	"format_version": "1.26.0",
+	"minecraft:block": {
+		"description": {
+			"identifier": "chunkloader:chunk_loader",
+			"menu_category": {
+				"category": "equipment"
+			},
+			"states": {
+				"chunkloader:active": [true, false]
+			}
+		},
+		"components": {
+			"chunkloader:redstone_handler": {},
+			"minecraft:destructible_by_mining": {
+				"seconds_to_destroy": 3.0
+			},
+			"minecraft:destructible_by_explosion": false,
+			"minecraft:movable": {
+				"movement_type": "immovable"
+			},
+			"minecraft:redstone_conductivity": {
+				"redstone_conductor": true,
+				"allows_wire_to_step_down": true
+			},
+			"minecraft:redstone_consumer": {
+				"min_power": 0
+			},
+			"minecraft:loot": "loot_tables/blocks/chunk_loader.json",
+			"minecraft:friction": 0.6,
+			"minecraft:map_color": "#8B00FF",
+			"minecraft:item_visual": {
+				"geometry": "geometry.chunk_loader_active",
+				"material_instances": {
+					"*": {
+						"texture": "chunk_loader_active",
+						"render_method": "alpha_test"
+					}
+				}
+			}
+		},
+		"permutations": [
+			{
+				"condition": "q.block_state('chunkloader:active') == true",
+				"components": {
+					"minecraft:light_emission": 10,
+					"minecraft:geometry": "geometry.chunk_loader_active",
+					"minecraft:material_instances": {
+						"*": {
+							"texture": "chunk_loader_active",
+							"render_method": "alpha_test"
+						}
+					}
+				}
+			},
+			{
+				"condition": "q.block_state('chunkloader:active') == false",
+				"components": {
+					"minecraft:light_emission": 0,
+					"minecraft:geometry": "geometry.chunk_loader_inactive",
+					"minecraft:material_instances": {
+						"*": {
+							"texture": "chunk_loader_inactive",
+							"render_method": "alpha_test"
+						}
+					}
+				}
+			}
+		]
+	}
+}

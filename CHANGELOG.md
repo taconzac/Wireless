@@ -1,5 +1,74 @@
 # Changelog
 
+## 3.3.0 - Renamed to Warehouse Utilities
+
+A larger change than a normal patch: this add-on is renamed from "Wireless
+Hopper 3.0" to **"Warehouse Utilities"**, and now bundles myGen's actual
+Chunk Loader block/item directly, in addition to Wireless Hopper's own
+automatic destination loaders.
+
+### Licensing (please read)
+
+myGen's Chunk Loader is licensed **GPL-3.0-or-later** (confirmed in its own
+`manifest.json`, author Rob 'myGen' Hall, https://mygen.co.uk). Merging its
+code in means the *entire add-on* - including all originally-authored
+Wireless Hopper code - is now distributed under GPL-3.0-or-later. A copy of
+the license is at the repo root (`LICENSE`). Both `BP/manifest.json` and
+`RP/manifest.json` now declare `"license": "GPL-3.0-or-later"` and credit
+both authors.
+
+### Added
+
+- **myGen's Chunk Loader**, bundled as its own craftable block/item
+  (`chunkloader:chunk_loader`), separate from Wireless Hopper's own
+  invisible, automatic `wr:chunk_loader` destination loaders. Same
+  underlying technique (`minecraft:tick_world`), but this one is a
+  visible, player-placed, manually-toggled tool with its own admin UI,
+  farm-mode integration, and redstone control - all as originally written
+  by Rob 'myGen' Hall, files kept intact except where noted below.
+- **0-chunk radius option**: the loader's "extra chunks" radius previously
+  couldn't go below 2. Added a `chunkloader:active_r0` component group
+  (`minecraft:tick_world` radius 0) so "just this one chunk, no border" is
+  now selectable, alongside the previously-unreachable radius 1. Fixed the
+  four places that clamped to `Math.max(2, ...)` (now `Math.max(0, ...)`)
+  and the two places that used `config.defaultRadius || 4` (now `?? 4` -
+  the old form silently replaced a real `0` with `4`, since `0` is falsy
+  in JS). The admin settings slider's minimum is now 0 instead of 2.
+- **Recipe changed**: the loader's crafting recipe used a beacon at its
+  center; changed to a netherite block (`recipes/chunk_loader.json`),
+  with the unlock condition updated to match.
+- **Wrench-visible loader radius**: holding `wr:wrench` and interacting
+  with a placed chunk loader now draws its actual loaded-chunk boundary as
+  a particle border (`showChunkLoaderBorder()` in `main.js`), using the
+  same visualization style as the hopper's own collection-range border,
+  so its real reach is visible at a glance instead of having to remember
+  the current radius setting.
+
+### Technical notes
+
+- File layout: myGen's script files were copied in as-is
+  (`ChunkLoaderUI.js`, `FarmDefinitions.js`, `FarmEmulator.js`,
+  `FloatingTextVisibility.js`, and its `main.js` renamed to
+  `ChunkLoaderCore.js` to avoid colliding with this add-on's own
+  `main.js`), then side-effect-imported so its own event subscriptions
+  register unchanged. Its `manager` instance is now also exported (marked
+  inline as a modification) so `main.js` can read the current radius for
+  the wrench visualization. Two asset filenames collided with existing
+  Wireless Hopper files (`entities/chunk_loader.json`,
+  `entity/chunk_loader.json`) and were kept under
+  `*_chunk_loader.json` → `mygen_chunk_loader.json` instead; everything
+  else (block, item, recipe, loot table, models, textures) had no naming
+  conflict and was copied under its original name. Shared atlas files
+  (`terrain_texture.json`) had myGen's entries merged in rather than
+  overwritten.
+- Verified with isolated tests: the full merged `main.js` imports and runs
+  myGen's startup registration without throwing; a `defaultRadius` of `0`
+  round-trips correctly through config storage; the wrench border
+  visualization on a chunk loader block produces exactly the expected
+  16x16 boundary at radius 0; and Wireless Hopper's own transport logic
+  (source → destination delivery) still works end-to-end on top of the
+  full merge.
+
 ## 3.2.12
 
 3.2.11 fixed the wrong layer: it addressed the very-first-bootstrap race

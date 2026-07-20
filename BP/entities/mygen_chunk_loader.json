@@ -1,0 +1,158 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:entity": {
+		"description": {
+			"identifier": "chunkloader:chunk_loader",
+			"is_spawnable": false,
+			"is_summonable": true,
+			"is_experimental": false
+		},
+		"components": {
+			"minecraft:type_family": {
+				"family": ["chunkloader", "inanimate"]
+			},
+			"minecraft:health": {
+				"value": 999999999,
+				"max": 999999999
+			},
+			"minecraft:collision_box": {
+				"width": 0.5,
+				"height": 0.5
+			},
+			"minecraft:nameable": {
+				"alwaysShow": true,
+				"allowNameTagRenaming": false
+			},
+			"minecraft:damage_sensor": {
+				"triggers": {
+					"cause": "all",
+					"deals_damage": false
+				}
+			},
+			"minecraft:fire_immune": true,
+			"minecraft:scale": {
+				"value": 0
+			},
+			"minecraft:knockback_resistance": {
+				"value": 1
+			},
+			"minecraft:physics": {
+				"has_gravity": false
+			},
+			"minecraft:pushable": {
+				"is_pushable": false
+			}
+		},
+		"component_groups": {
+			"chunkloader:active_r0": {
+				"minecraft:tick_world": {
+					"never_despawn": true,
+					"radius": 0
+				}
+			},
+			"chunkloader:active_r1": {
+				"minecraft:tick_world": {
+					"never_despawn": true,
+					"radius": 1
+				}
+			},
+			"chunkloader:active_r2": {
+				"minecraft:tick_world": {
+					"never_despawn": true,
+					"radius": 2
+				}
+			},
+			"chunkloader:active_r3": {
+				"minecraft:tick_world": {
+					"never_despawn": true,
+					"radius": 3
+				}
+			},
+			"chunkloader:active_r4": {
+				"minecraft:tick_world": {
+					"never_despawn": true,
+					"radius": 4
+				}
+			},
+			"chunkloader:active_r5": {
+				"minecraft:tick_world": {
+					"never_despawn": true,
+					"radius": 5
+				}
+			},
+			"chunkloader:active_r6": {
+				"minecraft:tick_world": {
+					"never_despawn": true,
+					"radius": 6
+				}
+			},
+			"chunkloader:inactive": {}
+		},
+		"events": {
+			"chunkloader:activate_r0": {
+				"add": {
+					"component_groups": ["chunkloader:active_r0"]
+				},
+				"remove": {
+					"component_groups": ["chunkloader:inactive", "chunkloader:active_r1", "chunkloader:active_r2", "chunkloader:active_r3", "chunkloader:active_r4", "chunkloader:active_r5", "chunkloader:active_r6"]
+				}
+			},
+			"chunkloader:activate_r1": {
+				"add": {
+					"component_groups": ["chunkloader:active_r1"]
+				},
+				"remove": {
+					"component_groups": ["chunkloader:inactive", "chunkloader:active_r0", "chunkloader:active_r2", "chunkloader:active_r3", "chunkloader:active_r4", "chunkloader:active_r5", "chunkloader:active_r6"]
+				}
+			},
+			"chunkloader:activate_r2": {
+				"add": {
+					"component_groups": ["chunkloader:active_r2"]
+				},
+				"remove": {
+					"component_groups": ["chunkloader:inactive", "chunkloader:active_r0", "chunkloader:active_r1", "chunkloader:active_r3", "chunkloader:active_r4", "chunkloader:active_r5", "chunkloader:active_r6"]
+				}
+			},
+			"chunkloader:activate_r3": {
+				"add": {
+					"component_groups": ["chunkloader:active_r3"]
+				},
+				"remove": {
+					"component_groups": ["chunkloader:inactive", "chunkloader:active_r0", "chunkloader:active_r1", "chunkloader:active_r2", "chunkloader:active_r4", "chunkloader:active_r5", "chunkloader:active_r6"]
+				}
+			},
+			"chunkloader:activate_r4": {
+				"add": {
+					"component_groups": ["chunkloader:active_r4"]
+				},
+				"remove": {
+					"component_groups": ["chunkloader:inactive", "chunkloader:active_r0", "chunkloader:active_r1", "chunkloader:active_r2", "chunkloader:active_r3", "chunkloader:active_r5", "chunkloader:active_r6"]
+				}
+			},
+			"chunkloader:activate_r5": {
+				"add": {
+					"component_groups": ["chunkloader:active_r5"]
+				},
+				"remove": {
+					"component_groups": ["chunkloader:inactive", "chunkloader:active_r0", "chunkloader:active_r1", "chunkloader:active_r2", "chunkloader:active_r3", "chunkloader:active_r4", "chunkloader:active_r6"]
+				}
+			},
+			"chunkloader:activate_r6": {
+				"add": {
+					"component_groups": ["chunkloader:active_r6"]
+				},
+				"remove": {
+					"component_groups": ["chunkloader:inactive", "chunkloader:active_r0", "chunkloader:active_r1", "chunkloader:active_r2", "chunkloader:active_r3", "chunkloader:active_r4", "chunkloader:active_r5"]
+				}
+			},
+			"chunkloader:deactivate": {
+				"add": {
+					"component_groups": ["chunkloader:inactive"]
+				},
+				"remove": {
+					"component_groups": ["chunkloader:active_r0", "chunkloader:active_r1", "chunkloader:active_r2", "chunkloader:active_r3", "chunkloader:active_r4", "chunkloader:active_r5", "chunkloader:active_r6"]
+				}
+			}
+		}
+	}
+}

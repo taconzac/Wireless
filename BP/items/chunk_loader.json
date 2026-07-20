@@ -1,0 +1,26 @@
+{
+	"format_version": "1.21.60",
+	"minecraft:item": {
+		"description": {
+			"identifier": "chunkloader:chunk_loader",
+			"menu_category": {
+				"category": "equipment"
+			}
+		},
+		"components": {
+			"minecraft:max_stack_size": 64,
+			"minecraft:glint": true,
+			"minecraft:display_name": {
+				"value": "§5§lChunk Loader"
+			},
+			"minecraft:lore": [
+				"§7Keeps chunks loaded around it (radius configurable, 0-6)",
+				"§7Place to activate chunk loading",
+				"§e⚠ Performance Impact: Moderate"
+			],
+			"minecraft:block_placer": {
+				"block": "chunkloader:chunk_loader"
+			}
+		}
+	}
+}

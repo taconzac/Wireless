@@ -2,13 +2,15 @@
  "format_version": 2,
  "metadata": {
   "authors": [
-   "Shadow"
+   "Shadow",
+   "Rob 'myGen' Hall"
   ],
+  "license": "GPL-3.0-or-later",
   "product_type": "addon"
  },
  "header": {
-  "name": "Wireless Hopper 3.0",
-  "description": "\u00a7o- Cross-dimensional routing + automatic destination chunk loading (myGen tick_world architecture)\n\u00a7o- Support version : \u00a7a1.21.60+\n\u00a7o- Creator Youtube : \u00a7a@shadowgamer100k\n\u00a7o- Note : \u00a7cIf you want to make review about this addon mention my channel or use my mcpdl link",
+  "name": "Warehouse Utilities",
+  "description": "\u00a7o- Cross-dimensional routing + automatic destination chunk loading (myGen tick_world architecture)\n\u00a7o- Includes myGen's Chunk Loader, GPL-3.0-or-later, by Rob 'myGen' Hall (https://mygen.co.uk)\n\u00a7o- Support version : \u00a7a1.21.60+\n\u00a7o- Creator Youtube : \u00a7a@shadowgamer100k\n\u00a7o- Note : \u00a7cIf you want to make review about this addon mention my channel or use my mcpdl link",
   "min_engine_version": [
    1,
    21,
@@ -17,8 +19,8 @@
   "uuid": "cf8962dd-445e-4672-ac3c-85c95c25e38b",
   "version": [
    3,
-   2,
-   12
+   3,
+   0
   ]
  },
  "modules": [
@@ -27,8 +29,8 @@
    "uuid": "ce32587b-189f-4be6-a4b6-7e606abb83dc",
    "version": [
     3,
-    2,
-    12
+    3,
+    0
    ]
   },
   {
@@ -38,8 +40,8 @@
    "entry": "scripts/main.js",
    "version": [
     3,
-    2,
-    12
+    3,
+    0
    ]
   }
  ],
@@ -48,8 +50,8 @@
    "uuid": "8dfd93cc-a4e2-499b-a445-1fdc7e78d66a",
    "version": [
     3,
-    2,
-    12
+    3,
+    0
    ]
   },
   {

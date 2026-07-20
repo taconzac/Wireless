@@ -2,12 +2,14 @@
  "format_version": 2,
  "metadata": {
   "authors": [
-   "shadow"
-  ]
+   "shadow",
+   "Rob 'myGen' Hall"
+  ],
+  "license": "GPL-3.0-or-later"
  },
  "header": {
-  "name": "Wireless Hopper 3.0 Resources",
-  "description": "\u00a7o- Support version : \u00a7a1.21.60+\n\u00a7o- Creator Youtube : \u00a7a@shadowgamer100k\n\u00a7o- Note : \u00a7cIf you want to make review about this addon mention my channel or use my mcpdl link",
+  "name": "Warehouse Utilities Resources",
+  "description": "§o- Includes myGen's Chunk Loader, GPL-3.0-or-later, by Rob 'myGen' Hall (https://mygen.co.uk)\n§o- Support version : §a1.21.60+\n§o- Creator Youtube : §a@shadowgamer100k\n§o- Note : §cIf you want to make review about this addon mention my channel or use my mcpdl link",
   "min_engine_version": [
    1,
    21,
@@ -16,8 +18,8 @@
   "uuid": "8dfd93cc-a4e2-499b-a445-1fdc7e78d66a",
   "version": [
    3,
-   2,
-   12
+   3,
+   0
   ]
  },
  "modules": [
@@ -26,8 +28,8 @@
    "uuid": "3499c52d-8750-48d0-b449-eeae2ee45be6",
    "version": [
     3,
-    2,
-    12
+    3,
+    0
    ]
   }
  ],
@@ -36,8 +38,8 @@
    "uuid": "cf8962dd-445e-4672-ac3c-85c95c25e38b",
    "version": [
     3,
-    2,
-    12
+    3,
+    0
    ]
   }
  ]

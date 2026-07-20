@@ -1,15 +1,23 @@
-# Wireless Hopper 3.0
+# Warehouse Utilities (formerly Wireless Hopper 3.0)
 
-A personal-use Minecraft Bedrock add-on. Wireless Hopper v2.5's item-routing
+A personal-use Minecraft Bedrock add-on. Wireless Hopper's item-routing
 feature set, with its `/tickingarea`-based chunk loader replaced by the
 entity-based `minecraft:tick_world` technique from the myGen Chunk Loader.
+
+As of 3.3.0, this add-on also bundles myGen's actual Chunk Loader block/item
+(craftable, player-placed, GPL-3.0-or-later, by Rob 'myGen' Hall -
+https://mygen.co.uk) as a standalone tool alongside Wireless Hopper's own
+automatic destination loaders. **Because of that, the whole add-on -
+including all the originally-authored Wireless Hopper code - is licensed
+under GPL-3.0-or-later; see `LICENSE`.**
 
 ## What's in this repo
 
 ```
-BP/    Wireless Hopper 3.0 Behaviour Pack
-RP/    Wireless Hopper 3.0 Resource Pack
+BP/    Warehouse Utilities Behaviour Pack
+RP/    Warehouse Utilities Resource Pack
 CHANGELOG.md
+LICENSE     GPL-3.0-or-later (applies to the whole add-on as of 3.3.0)
 README.md   (this file)
 ```
 
