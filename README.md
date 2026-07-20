@@ -15,9 +15,12 @@ README.md   (this file)
 
 Everything under `BP/` and `RP/` except `BP/scripts/` is byte-for-byte
 identical to Wireless Hopper v2.5 (blocks, items, entities, recipes, models,
-textures) — the wrench, the hopper block/entity, filters, channels, fuel,
-range upgrades, redstone modes, crafting, and UI text are all unchanged.
-Only the chunk-loading implementation was replaced.
+textures) — the wrench, the hopper block/entity, filters, channels, range
+upgrades, redstone modes, crafting, and UI text are all unchanged. Two
+things were rewritten in `scripts/`: the chunk-loading implementation
+(v3.0), and, as of v3.1, the fuel system was removed entirely — hoppers
+now run unconditionally from the moment they're placed. See CHANGELOG.md
+for the full list of what changed in each version.
 
 ## Architecture
 
@@ -138,14 +141,16 @@ of creating duplicates.
 
 The manifest header UUIDs and module UUIDs are unchanged from v2.5, so this
 is an in-place update, not a new add-on — a world with Wireless Hopper v2.5
-applied will pick up 3.0 the moment the pack files are replaced, no
-relinking needed. All existing dynamic properties (`ownerName`,
-`containerCount`, `container_0..9`, `filterList`, `isWhitelist`, `fuel`,
+applied will pick up 3.x the moment the pack files are replaced, no
+relinking needed. All routing-relevant dynamic properties (`ownerName`,
+`containerCount`, `container_0..9`, `filterList`, `isWhitelist`,
 `CollectRange`, `distMode`, `rsMode`, `xpMode`, `trashMode`, `customName`,
-`rrIndex`) are read and written exactly as before. The only legacy state
-this version touches is the `ChunkLoaded` tag, which is stripped from
-existing hoppers on the next world load since the feature it drove no
-longer exists.
+`rrIndex`) are read and written exactly as before. The startup migration
+strips legacy state that no longer means anything: the `ChunkLoaded` tag
+(drove the old tickingarea toggle) and, as of 3.1, the `fuel`/`fuelTime`
+properties and `FuelNotification` tag (the fuel system is gone — hoppers
+placed under v2.5 simply start working unconditionally the next time the
+world loads, with no fuel to refill).
 
 ## Testing
 

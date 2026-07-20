@@ -5,13 +5,9 @@ import { addItemsToInventory } from "./InventoryUtils.js";
 import { runSelfTests } from "./selfTest.js";
 
 // Constants
-const FUEL_CAPACITY = 100;
-const FUEL_CONSUME_INTERVAL = 6000;
 const DEFAULT_COLLECT_RANGE = 3;
 const MAX_COLLECT_RANGE = 10;
 const COOLDOWN_DURATION = 1000;
-const FUEL_EFFICIENCY_PER_TIER = 0.05; // +5% fuel duration per range upgrade
-const MAX_FUEL_EFFICIENCY_BONUS = 0.35; // capped at +35% (7 upgrades)
 
 // Type IDs
 const ENTITY_ID = "wr:wireless_hopper";
@@ -31,20 +27,6 @@ function getDirection(from, to) {
   return len === 0
     ? { x: 0, y: 0, z: 0 }
     : { x: dir.x / len, y: dir.y / len, z: dir.z / len };
-}
-
-// Each range upgrade (amethyst) also makes the engine slightly more
-// fuel-efficient, capped at MAX_FUEL_EFFICIENCY_BONUS.
-function getFuelEfficiencyBonus(entity) {
-  const range =
-    entity.getDynamicProperty("CollectRange") || DEFAULT_COLLECT_RANGE;
-  const tier = Math.max(0, range - DEFAULT_COLLECT_RANGE);
-  return Math.min(tier * FUEL_EFFICIENCY_PER_TIER, MAX_FUEL_EFFICIENCY_BONUS);
-}
-
-function getFuelConsumeInterval(entity) {
-  const bonus = getFuelEfficiencyBonus(entity);
-  return Math.round(FUEL_CONSUME_INTERVAL * (1 + bonus));
 }
 
 // === ROBUST REDSTONE CHECKER ===
@@ -94,10 +76,12 @@ function getReceivedSignal(block) {
 //     A fresh session always starts with an empty ChunkLoaderManager map, so
 //     any surviving loader entity is guaranteed to be an orphan (it kept
 //     itself loaded via tick_world, which is exactly why it's still here).
-//  2. Strip the legacy "ChunkLoaded" tag from existing hoppers. The tag drove
-//     the old tickingarea-based toggle, which no longer exists; routing data
-//     (container_0.. etc.) is untouched, so linked hoppers keep working with
-//     no player action required.
+//  2. Strip legacy state from existing hoppers that no longer means
+//     anything: the "ChunkLoaded" tag (drove the old tickingarea-based
+//     toggle), and the fuel system's "fuel"/"fuelTime" properties and
+//     "FuelNotification" tag (hoppers now always run, unconditionally).
+//     Routing data (container_0.. etc.) is untouched, so linked hoppers
+//     keep working with no player action required.
 system.run(() => {
   runSelfTests();
 
@@ -107,7 +91,15 @@ system.run(() => {
       purgeOrphanLoaders(dim);
 
       for (const hopper of dim.getEntities({ typeId: ENTITY_ID })) {
-        if (hopper?.hasTag("ChunkLoaded")) hopper.removeTag("ChunkLoaded");
+        if (!hopper) continue;
+        if (hopper.hasTag("ChunkLoaded")) hopper.removeTag("ChunkLoaded");
+        if (hopper.hasTag("FuelNotification")) hopper.removeTag("FuelNotification");
+        if (hopper.getDynamicProperty("fuel") !== undefined) {
+          hopper.setDynamicProperty("fuel", undefined);
+        }
+        if (hopper.getDynamicProperty("fuelTime") !== undefined) {
+          hopper.setDynamicProperty("fuelTime", undefined);
+        }
       }
     } catch (e) {}
   }
@@ -210,12 +202,10 @@ function showGlobalDashboard(player) {
     );
 
   hoppers.forEach((h, i) => {
-    const fuel = h.entity.getDynamicProperty("fuel") || 0;
     const loc = h.entity.location;
     const customName = h.entity.getDynamicProperty("customName");
     const displayName = customName ? `§e${customName}§r` : `Unit ${i + 1}`;
 
-    const fuelColor = fuel < 20 ? "§c" : "§a";
     const dimShort =
       h.dimension === "overworld"
         ? "OW"
@@ -224,10 +214,10 @@ function showGlobalDashboard(player) {
           : "END";
 
     form.button(
-      `§l${displayName} §8[§f${dimShort}§8]\n§r${fuelColor}Fuel: ${fuel}% §7| Pos: ${Math.floor(
+      `§l${displayName} §8[§f${dimShort}§8]\n§r§aPos: ${Math.floor(
         loc.x,
       )}, ${Math.floor(loc.y)}, ${Math.floor(loc.z)}`,
-      fuel < 20 ? "textures/ui/warning_icon" : "textures/items/redstone_dust",
+      "textures/items/redstone_dust",
     );
   });
 
@@ -406,56 +396,15 @@ world.beforeEvents.playerInteractWithBlock.subscribe((ev) => {
       };
       player.playSound("random.levelup");
       player.dimension.spawnParticle("minecraft:totem_particle", centerLoc);
-      const newEfficiencyPct = Math.round(
-        getFuelEfficiencyBonus(hopperEntity) * 100,
-      );
       player.sendMessage(
-        `§a[UPGRADE] Range increased to ${currentRange + 1} blocks. §7(Fuel efficiency: +${newEfficiencyPct}%)`,
+        `§a[UPGRADE] Range increased to ${currentRange + 1} blocks.`,
       );
       showRangeBorder(hopperEntity, currentRange + 1);
     });
     return;
   }
 
-  // 3. REFUEL
-  if (
-    block.typeId === BLOCK_ID &&
-    itemStack?.typeId === "minecraft:redstone_block"
-  ) {
-    ev.cancel = true;
-    player["cool_down"] = Date.now() + COOLDOWN_DURATION;
-    system.run(() => {
-      const safeHopper = player.dimension.getEntities({
-        typeId: ENTITY_ID,
-        location: block.location,
-        maxDistance: 1.5,
-      })[0];
-      if (!safeHopper) return;
-
-      if ((safeHopper.getDynamicProperty("fuel") || 0) >= 100) {
-        player.playSound("note.bass");
-        player.sendMessage("§c[SYSTEM] Fuel cells at maximum capacity.");
-        return;
-      }
-      safeHopper.setDynamicProperty("fuel", FUEL_CAPACITY);
-      player.runCommand("clear @s redstone_block 0 1");
-
-      const centerLoc = {
-        x: safeHopper.location.x,
-        y: safeHopper.location.y + 0.5,
-        z: safeHopper.location.z,
-      };
-      player.playSound("bucket.fill_lava");
-      player.dimension.spawnParticle(
-        "minecraft:redstone_ore_dust_particle",
-        centerLoc,
-      );
-      player.sendMessage("§a[SYSTEM] Refueling complete (100%).");
-    });
-    return;
-  }
-
-  // 4. CONFIG MENU
+  // 3. CONFIG MENU
   if (
     block.typeId === BLOCK_ID &&
     player.isSneaking &&
@@ -475,12 +424,8 @@ world.beforeEvents.playerInteractWithBlock.subscribe((ev) => {
     return;
   }
 
-  // 5. FUEL/STATUS DISPLAY
-  if (
-    block.typeId === BLOCK_ID &&
-    itemStack?.typeId !== "minecraft:redstone_block" &&
-    itemStack?.typeId !== WRENCH_ID
-  ) {
+  // 4. STATUS DISPLAY
+  if (block.typeId === BLOCK_ID && itemStack?.typeId !== WRENCH_ID) {
     player["cool_down"] = Date.now() + COOLDOWN_DURATION;
     system.run(() => {
       const safeHopper = player.dimension.getEntities({
@@ -490,7 +435,6 @@ world.beforeEvents.playerInteractWithBlock.subscribe((ev) => {
       })[0];
       if (!safeHopper) return;
 
-      const fuel = safeHopper.getDynamicProperty("fuel") || 0;
       const range =
         safeHopper.getDynamicProperty("CollectRange") || DEFAULT_COLLECT_RANGE;
       const customName = safeHopper.getDynamicProperty("customName");
@@ -502,7 +446,7 @@ world.beforeEvents.playerInteractWithBlock.subscribe((ev) => {
       if (rsMode === 1 && power > 0) isLocked = true;
       if (rsMode === 2 && power === 0) isLocked = true;
 
-      const statusText = isLocked ? "§c[LOCKED]" : `§aFuel: §l${fuel}%`;
+      const statusText = isLocked ? "§c[LOCKED]" : "§aACTIVE";
 
       player.onScreenDisplay.setActionBar(
         `${name} | ${statusText}§r | Range: §l${range}x${range}`,
@@ -511,7 +455,7 @@ world.beforeEvents.playerInteractWithBlock.subscribe((ev) => {
     return;
   }
 
-  // 6. SHOW BORDER
+  // 5. SHOW BORDER
   if (itemStack?.typeId === WRENCH_ID) {
     system.run(() => {
       const hoppers = player.dimension.getEntities({
@@ -543,7 +487,7 @@ function showMainMenu(entity, player) {
         `§7Select a module below to configure parameters.`,
     )
     .button(
-      "§lStatus & Diagnostics\n§r§7View stats & fuel",
+      "§lStatus & Diagnostics\n§r§7View stats",
       "textures/ui/icon_map",
     )
     .button(
@@ -702,7 +646,6 @@ function showConfig(entity, player) {
   const rsMode = entity.getDynamicProperty("rsMode") || 0;
   const xpState = entity.getDynamicProperty("xpMode") ?? false;
 
-  const fuelState = entity.hasTag("FuelNotification");
   const fullState = entity.hasTag("FullNotification");
   const teleState = entity.hasTag("Teleportable");
   const borderState = entity.hasTag("ShowBoarder");
@@ -711,7 +654,6 @@ function showConfig(entity, player) {
 
   new ModalFormData()
     .title("§l§dSYSTEM KERNEL")
-    .toggle("§7Fuel Notification", { defaultvalue: fuelState })
     .toggle("§7Full Notification", { defaultvalue: fullState })
     .toggle("§aDistribution Enabled", { defaultvalue: teleState })
     .toggle("§7Show Range Border", { defaultvalue: borderState })
@@ -739,12 +681,9 @@ function showConfig(entity, player) {
         return;
       }
 
-      const [fuel, full, tele, border, anti, trash, xpMode, dist, newRsMode] =
+      const [full, tele, border, anti, trash, xpMode, dist, newRsMode] =
         formValues;
 
-      fuel
-        ? entity.addTag("FuelNotification")
-        : entity.removeTag("FuelNotification");
       full
         ? entity.addTag("FullNotification")
         : entity.removeTag("FullNotification");
@@ -776,14 +715,12 @@ function showConfig(entity, player) {
 }
 
 function showStatusInfo(entity, player) {
-  const fuel = entity.getDynamicProperty("fuel") || 0;
   const tier = entity.getDynamicProperty("tier") || 1;
   const range =
     entity.getDynamicProperty("CollectRange") || DEFAULT_COLLECT_RANGE;
   const count = entity.getDynamicProperty("containerCount") || 0;
   const trash = entity.getDynamicProperty("trashMode") ? "§cON" : "§aOFF";
   const xpMode = entity.getDynamicProperty("xpMode") ? "§eACTIVE" : "§7OFF";
-  const efficiencyPct = Math.round(getFuelEfficiencyBonus(entity) * 100);
   const dist =
     (entity.getDynamicProperty("distMode") || 0) === 0
       ? "Round Robin"
@@ -804,8 +741,6 @@ function showStatusInfo(entity, player) {
     .body(
       `§7================================\n` +
         `§7UNIT ID   : §f${name}\n` +
-        `§7FUEL CELL : §f${fuel}%\n` +
-        `§7EFFICIENCY: §a+${efficiencyPct}%\n` +
         `§7TIER      : §f${tier}\n` +
         `§7COVERAGE  : §f${range}x${range}\n` +
         `§7OUTPUTS   : §f${count}\n` +
@@ -855,17 +790,13 @@ function showLinkedContainers(entity, player) {
 function showRangeUpgradeInfo(entity, player) {
   const range =
     entity.getDynamicProperty("CollectRange") || DEFAULT_COLLECT_RANGE;
-  const efficiencyPct = Math.round(getFuelEfficiencyBonus(entity) * 100);
-  const maxEfficiencyPct = Math.round(MAX_FUEL_EFFICIENCY_BONUS * 100);
   new ActionFormData()
     .title("§l§dRANGE UPGRADE")
     .body(
       `§7Current Radius: §b${range}x${range}\n` +
-        `§7Maximum Limit : §c${MAX_COLLECT_RANGE}x${MAX_COLLECT_RANGE}\n` +
-        `§7Fuel Efficiency: §a+${efficiencyPct}% §7(max §a+${maxEfficiencyPct}%§7)\n\n` +
+        `§7Maximum Limit : §c${MAX_COLLECT_RANGE}x${MAX_COLLECT_RANGE}\n\n` +
         `§fProtocol:\n` +
-        `§7Interact with the hopper block using an §dAmethyst Shard§7 to expand coverage.\n` +
-        `§7Each upgrade also improves fuel efficiency.`,
+        `§7Interact with the hopper block using an §dAmethyst Shard§7 to expand coverage.`,
     )
     .button("OK")
     .show(player);
@@ -906,21 +837,6 @@ system.runInterval(() => {
         }
         continue;
       }
-
-      // Fuel Logic
-      let fuel = entity.getDynamicProperty("fuel") || 0;
-      let fuelTime = entity.getDynamicProperty("fuelTime") || 0;
-      fuelTime++;
-
-      const fuelConsumeInterval = getFuelConsumeInterval(entity);
-      if (fuelTime >= fuelConsumeInterval) {
-        fuel = Math.max(0, fuel - 1);
-        entity.setDynamicProperty("fuel", fuel);
-        entity.setDynamicProperty("fuelTime", 0);
-      }
-      entity.setDynamicProperty("fuelTime", fuelTime);
-
-      if (fuel <= 0) continue;
 
       // === 1. COLLECT & VACUUM ===
       const range =
@@ -1119,7 +1035,6 @@ world.afterEvents.playerPlaceBlock.subscribe((ev) => {
       e.addTag("Teleportable");
       e.setDynamicProperty("ownerName", ev.player.name);
       e.setDynamicProperty("CollectRange", DEFAULT_COLLECT_RANGE);
-      e.setDynamicProperty("fuel", 0);
       e.setDynamicProperty("rsMode", 0);
       e.setDynamicProperty("xpMode", false); // Default OFF
 

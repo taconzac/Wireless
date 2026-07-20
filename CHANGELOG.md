@@ -1,5 +1,38 @@
 # Changelog
 
+## 3.1.0
+
+### Removed
+
+- The entire fuel system. Wireless Hoppers now run unconditionally from the
+  moment they're placed — no fuel meter, no refueling with redstone blocks,
+  no dead tank.
+  - Removed `FUEL_CAPACITY`, `FUEL_CONSUME_INTERVAL`, `FUEL_EFFICIENCY_PER_TIER`,
+    `MAX_FUEL_EFFICIENCY_BONUS`, and the `getFuelEfficiencyBonus()` /
+    `getFuelConsumeInterval()` helpers.
+  - Removed the per-tick fuel drain and the `if (fuel <= 0) continue;` gate
+    from the main loop — hoppers now always run their vacuum and
+    distribution logic (subject only to the existing redstone lock).
+  - Removed the redstone-block "REFUEL" interaction entirely; redstone
+    blocks now just trigger the ordinary status display like any other
+    item, instead of being consumed.
+  - Removed fuel from every UI surface: the dashboard button, the
+    wrench-tap status display (now shows "ACTIVE" instead of a fuel %),
+    the Diagnostics menu (dropped "FUEL CELL" and "EFFICIENCY" lines), the
+    Range Upgrade info screen (dropped the fuel-efficiency side-benefit
+    text — amethyst upgrades now purely increase collection radius), and
+    the System Settings "Fuel Notification" toggle (this toggle never
+    actually did anything even in v2.5 — no code fired a notification off
+    it — so it was dead weight either way).
+  - New hoppers no longer start at 0 fuel; they work immediately on
+    placement.
+  - The startup migration now also strips the legacy `fuel`, `fuelTime`,
+    and `FuelNotification` state from existing hoppers, alongside the
+    `ChunkLoaded` cleanup already in place.
+- Re-verified with the same integration harness used for the chunk-loader
+  fix: full unloaded→reachable→transfer→dedupe→expire lifecycle still
+  passes with fuel removed.
+
 ## 3.0.0
 
 Rewrite of the chunk-loading layer only. Everything else — linking, channels,
