@@ -5,11 +5,11 @@
    "shadow",
    "Rob 'myGen' Hall"
   ],
-  "license": "GPL-3.0-or-later"
+  "license": "GPL-3.0-or-later AND CC-BY-NC-SA-4.0"
  },
  "header": {
   "name": "Warehouse Utilities Resources",
-  "description": "§o- Includes myGen's Chunk Loader, GPL-3.0-or-later, by Rob 'myGen' Hall (https://mygen.co.uk)\n§o- Support version : §a1.21.60+\n§o- Creator Youtube : §a@shadowgamer100k\n§o- Note : §cIf you want to make review about this addon mention my channel or use my mcpdl link",
+  "description": "§o- Includes myGen's Chunk Loader (GPL-3.0-or-later) and BedrockChunkVisualizer (CC BY-NC-SA 4.0), by Rob 'myGen' Hall (https://mygen.co.uk) - see LICENSE/LICENSE-CC-BY-NC-SA/NOTICE\n§o- Support version : §a1.21.60+\n§o- Creator Youtube : §a@shadowgamer100k\n§o- Note : §cIf you want to make review about this addon mention my channel or use my mcpdl link",
   "min_engine_version": [
    1,
    21,
@@ -19,7 +19,7 @@
   "version": [
    3,
    3,
-   2
+   3
   ]
  },
  "modules": [
@@ -29,7 +29,7 @@
    "version": [
     3,
     3,
-    2
+    3
    ]
   }
  ],
@@ -39,7 +39,7 @@
    "version": [
     3,
     3,
-    2
+    3
    ]
   }
  ]

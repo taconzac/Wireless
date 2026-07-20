@@ -11,13 +11,24 @@ automatic destination loaders. **Because of that, the whole add-on -
 including all the originally-authored Wireless Hopper code - is licensed
 under GPL-3.0-or-later; see `LICENSE`.**
 
+As of 3.3.3, it also bundles BedrockChunkVisualizer's particle-rendering
+code (also by Rob 'myGen' Hall, but under **CC BY-NC-SA 4.0** - a
+different, more restrictive license than the Chunk Loader's GPL-3.0) to
+draw the wrench's chunk-loader border. **This means the add-on, while it
+contains this material, cannot be used commercially** (sold, paywalled,
+ad-monetized, etc.) on top of the GPL source-availability requirement
+above - see `LICENSE-CC-BY-NC-SA` and `NOTICE` for exactly which files
+this applies to.
+
 ## What's in this repo
 
 ```
 BP/    Warehouse Utilities Behaviour Pack
 RP/    Warehouse Utilities Resource Pack
 CHANGELOG.md
-LICENSE     GPL-3.0-or-later (applies to the whole add-on as of 3.3.0)
+LICENSE               GPL-3.0-or-later (whole add-on, as of 3.3.0)
+LICENSE-CC-BY-NC-SA   CC BY-NC-SA 4.0 (chunk-loader border only, as of 3.3.3)
+NOTICE                Which files came from where, under which license
 README.md   (this file)
 ```
 

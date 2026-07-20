@@ -1,0 +1,68 @@
+Warehouse Utilities bundles code from two other add-ons by the same
+author, each under its own license. This file records exactly what came
+from where, per each license's attribution requirement.
+
+## GPL-3.0-or-later - myGen Chunk Loader
+
+Copyright (C) Rob 'myGen' Hall (https://mygen.co.uk)
+Source: "Bedrock Chunk Loader" v1.3.0
+License: GPL-3.0-or-later (see LICENSE)
+
+Files (as merged into this add-on):
+  BP/blocks/chunk_loader.json
+  BP/entities/mygen_chunk_loader.json
+  BP/items/chunk_loader.json
+  BP/loot_tables/blocks/chunk_loader.json
+  BP/recipes/chunk_loader.json          (modified: beacon -> netherite block)
+  BP/scripts/ChunkLoaderCore.js         (renamed from main.js; modified: added
+                                          0-chunk radius support)
+  BP/scripts/ChunkLoaderUI.js
+  BP/scripts/FarmDefinitions.js
+  BP/scripts/FarmEmulator.js
+  BP/scripts/FloatingTextVisibility.js
+  BP/texts/en_US.lang
+  RP/entity/mygen_chunk_loader.json     (renamed from entity/chunk_loader.json)
+  RP/models/blocks/chunk_loader_active.geo.json
+  RP/models/blocks/chunk_loader_inactive.geo.json
+  RP/textures/blocks/chunk_loader_active.png
+  RP/textures/blocks/chunk_loader_inactive.png
+  RP/textures/flipbook_textures.json
+  RP/textures/terrain_texture.json      (3 entries merged in, rest unchanged)
+
+## CC BY-NC-SA 4.0 - BedrockChunkVisualizer
+
+Copyright (C) Rob 'myGen' Hall (https://mygen.co.uk)
+Source: "BedrockChunkVisualizer" v1.1.1
+License: CC BY-NC-SA 4.0 (see LICENSE-CC-BY-NC-SA)
+
+Files (as merged into this add-on):
+  BP/scripts/ChunkLoaderBorder.js       (renamed from ParticleRenderer.js;
+                                          modified: renders an arbitrary
+                                          radius around a given chunk
+                                          instead of a fixed 3x3 around the
+                                          player; trigger changed from a
+                                          named compass to wr:wrench)
+  RP/particles/east.json
+  RP/particles/inner.json
+  RP/particles/inner_ew.json
+  RP/particles/inner_ew_static.json
+  RP/particles/inner_static.json
+  RP/particles/north.json
+  RP/particles/outer.json
+  RP/particles/outer_ew.json
+  RP/particles/outer_ew_static.json
+  RP/particles/outer_static.json
+  RP/particles/south.json
+  RP/particles/west.json
+  RP/textures/particle/east.png
+  RP/textures/particle/inner.png
+  RP/textures/particle/north.png
+  RP/textures/particle/outer.png
+  RP/textures/particle/south.png
+  RP/textures/particle/west.png
+
+## Everything else
+
+Original Wireless Hopper / Warehouse Utilities code, authored by Shadow,
+also distributed under GPL-3.0-or-later as of this add-on's combination
+with GPL-licensed material (see LICENSE).

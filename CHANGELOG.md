@@ -1,5 +1,50 @@
 # Changelog
 
+## 3.3.3
+
+3.3.2's diagnostic didn't get a clear answer, but reported still not
+working at all on iOS - so rather than keep guessing at the plain
+vanilla-particle (`minecraft:endrod`) approach, replaced it outright with
+the particle-rendering system from a separate, proven addon:
+BedrockChunkVisualizer.
+
+### Licensing (please read)
+
+BedrockChunkVisualizer is licensed **CC BY-NC-SA 4.0** (also by Rob
+'myGen' Hall, but a different license than the Chunk Loader's GPL-3.0 -
+confirmed in its own `manifest.json`). This is more restrictive than GPL
+in one specific way: **NonCommercial** - the add-on may not be used for
+commercial purposes (sold, paywalled, ad-monetized, etc.) while it
+contains this material, on top of the GPL source-availability requirement
+already in place from 3.3.0. Added `LICENSE-CC-BY-NC-SA` (the CC BY-NC-SA
+4.0 notice + canonical link) and `NOTICE` (exactly which files came from
+which license) at the repo root, and both manifests now declare
+`"license": "GPL-3.0-or-later AND CC-BY-NC-SA-4.0"`.
+
+### Changed
+
+- Removed `showChunkLoaderBorder()` (the `minecraft:endrod`-based border
+  from 3.3.0/3.3.1/3.3.2) entirely.
+- Added `ChunkLoaderBorder.js` (adapted from BedrockChunkVisualizer's
+  `ParticleRenderer.js`): renders the border of every chunk a loader
+  currently keeps loaded - its own chunk plus its configured radius out
+  from there - using textured/animated particle walls instead of sparse
+  vanilla particle dots. The original only ever rendered a fixed 3x3 grid
+  centered on the player; this version takes an arbitrary radius and a
+  center chunk (the loader block's, not the player's) as parameters.
+- Trigger changed from the original addon's "hold a compass named
+  'chunky'/'stillchunky'" to this add-on's own wrench (`wr:wrench`),
+  consistent with every other wrench-triggered visualization already in
+  this add-on. Does not check whether the loader is currently active.
+- Radius shown is the current global "Default Chunk Radius" admin
+  setting, same caveat as before: it reflects the *current* setting, not
+  necessarily what a specific already-placed loader is actually running
+  if the admin changed it since that loader was last activated.
+- Verified with isolated tests: the border stays gated on holding the
+  wrench (confirmed absent without it), and shows a radius-2 (5x5 chunk)
+  area correctly sized and positioned when held; Wireless Hopper's own
+  transport logic still works end-to-end on top of this change.
+
 ## 3.3.2
 
 Reported: the chunk-loader border doesn't seem to work on iOS.

@@ -169,6 +169,11 @@ class ChunkLoaderManager {
 // Initialize manager
 const manager = new ChunkLoaderManager();
 
+// [Modified for Warehouse Utilities] Exported so main.js can read the
+// current default radius for the wrench's chunk-loader border
+// visualization, without duplicating this class's config storage.
+export { manager };
+
 // Initialize floating text visibility (raycasting to hide text behind walls)
 const visibility = new FloatingTextVisibility();
 

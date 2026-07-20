@@ -10,7 +10,15 @@ import { runSelfTests } from "./selfTest.js";
 // destination loaders above). Self-contained: it registers all of its own
 // event subscriptions at import time, so a side-effect import is all that's
 // needed to wire it in. GPL-3.0-or-later, by Rob 'myGen' Hall - see LICENSE.
-import "./ChunkLoaderCore.js";
+// `manager` is additionally used below to read the current radius setting
+// for the wrench's chunk-loader border visualization.
+import { manager as mygenChunkLoaderManager } from "./ChunkLoaderCore.js";
+// BedrockChunkVisualizer's particle renderer, adapted to draw an arbitrary
+// radius around a chunk loader block instead of a fixed 3x3 around the
+// player. CC BY-NC-SA 4.0, by Rob 'myGen' Hall - see LICENSE-CC-BY-NC-SA.
+import { ChunkLoaderBorder } from "./ChunkLoaderBorder.js";
+
+const chunkLoaderBorder = new ChunkLoaderBorder();
 
 const DIMENSION_NAMES = ["overworld", "nether", "the_end"];
 
@@ -599,14 +607,19 @@ world.beforeEvents.playerInteractWithBlock.subscribe((ev) => {
     });
   }
 
-  // TEMPORARY: reported not working on iOS. Dropped the wrench-only
-  // condition so ANY interaction with a myGen chunk loader shows the
-  // border, to isolate whether the handler/particle spawn itself works on
-  // iOS at all, versus something specific to the itemStack/wrench check.
-  // Revert to requiring the wrench once confirmed.
-  if (block.typeId === "chunkloader:chunk_loader") {
+  // Holding the wrench and interacting with a myGen chunk loader shows the
+  // border of every chunk it currently keeps loaded (its own chunk plus
+  // its configured radius out from there), regardless of whether it's
+  // currently active. Uses BedrockChunkVisualizer's particle system
+  // (CC BY-NC-SA 4.0) instead of the plain vanilla-particle border from
+  // 3.3.0/3.3.1, which wasn't showing up at all on iOS.
+  if (itemStack?.typeId === WRENCH_ID && block.typeId === "chunkloader:chunk_loader") {
     system.run(() => {
-      showChunkLoaderBorder(block);
+      const loc = block.location;
+      const chunkX = Math.floor(loc.x / 16);
+      const chunkZ = Math.floor(loc.z / 16);
+      const radius = mygenChunkLoaderManager.getConfig().defaultRadius ?? 4;
+      chunkLoaderBorder.renderChunkBorders(player, chunkX, chunkZ, radius);
     });
   }
 });
@@ -1398,46 +1411,6 @@ world.beforeEvents.playerBreakBlock.subscribe((ev) => {
     }
   }
 });
-
-/**
- * Draws a border around just the single 16x16 chunk a placed myGen chunk
- * loader block sits in - not its configured radius. Radius is only ever
- * tracked as one global admin setting, not per-loader, so showing it here
- * would just display whatever the *current* global default happens to be,
- * not what this specific loader is actually keeping loaded - misleading
- * rather than useful. This never depends on the loader's active/inactive
- * state either: it's just "here's the chunk this block is in".
- */
-function showChunkLoaderBorder(block) {
-  const dim = block.dimension;
-  const loc = block.location;
-  const chunkX = Math.floor(loc.x / 16);
-  const chunkZ = Math.floor(loc.z / 16);
-  const minX = chunkX * 16;
-  const maxX = chunkX * 16 + 15;
-  const minZ = chunkZ * 16;
-  const maxZ = chunkZ * 16 + 15;
-  const y = loc.y + 1.2;
-  const step = 4;
-
-  const safeSpawn = (id, particleLoc) => {
-    if (particleLoc.y < -64 || particleLoc.y > 320) return;
-    try {
-      dim.spawnParticle(id, particleLoc);
-    } catch (e) {}
-  };
-
-  try {
-    for (let x = minX; x <= maxX; x += step) {
-      safeSpawn("minecraft:endrod", { x, y, z: minZ });
-      safeSpawn("minecraft:endrod", { x, y, z: maxZ });
-    }
-    for (let z = minZ; z <= maxZ; z += step) {
-      safeSpawn("minecraft:endrod", { x: minX, y, z });
-      safeSpawn("minecraft:endrod", { x: maxX, y, z });
-    }
-  } catch (e) {}
-}
 
 function showRangeBorder(entity, range) {
   if (!entity) return;

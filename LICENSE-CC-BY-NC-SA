@@ -1,0 +1,24 @@
+Portions of this add-on (the chunk-loader border/particle visualization,
+derived from BedrockChunkVisualizer) are:
+
+  Copyright (C) Rob 'myGen' Hall (https://mygen.co.uk)
+  Licensed under Creative Commons Attribution-NonCommercial-ShareAlike 4.0
+  International (CC BY-NC-SA 4.0).
+
+Full legal text: https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
+Human-readable summary: https://creativecommons.org/licenses/by-nc-sa/4.0/
+
+In short, for the files this applies to (see NOTICE for the exact list):
+  - Attribution required (see NOTICE).
+  - NonCommercial: this add-on, or any derivative of it, may not be used
+    for commercial purposes while it contains this material.
+  - ShareAlike: any modified version of this material must be distributed
+    under this same CC BY-NC-SA 4.0 license.
+
+This is separate from, and in addition to, this add-on's GPL-3.0-or-later
+license (see LICENSE) covering the rest of the code (including the
+bundled myGen Chunk Loader). Combining GPL-3.0-or-later and CC BY-NC-SA
+4.0 material in one add-on means the add-on as a whole is bound by both:
+full corresponding source must be available to anyone who receives it
+(GPL), and it may not be used commercially while it contains this
+material (CC BY-NC-SA).

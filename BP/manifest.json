@@ -5,12 +5,12 @@
    "Shadow",
    "Rob 'myGen' Hall"
   ],
-  "license": "GPL-3.0-or-later",
+  "license": "GPL-3.0-or-later AND CC-BY-NC-SA-4.0",
   "product_type": "addon"
  },
  "header": {
   "name": "Warehouse Utilities",
-  "description": "\u00a7o- Cross-dimensional routing + automatic destination chunk loading (myGen tick_world architecture)\n\u00a7o- Includes myGen's Chunk Loader, GPL-3.0-or-later, by Rob 'myGen' Hall (https://mygen.co.uk)\n\u00a7o- Support version : \u00a7a1.21.60+\n\u00a7o- Creator Youtube : \u00a7a@shadowgamer100k\n\u00a7o- Note : \u00a7cIf you want to make review about this addon mention my channel or use my mcpdl link",
+  "description": "\u00a7o- Cross-dimensional routing + automatic destination chunk loading (myGen tick_world architecture)\n\u00a7o- Includes myGen's Chunk Loader (GPL-3.0-or-later) and BedrockChunkVisualizer (CC BY-NC-SA 4.0), by Rob 'myGen' Hall (https://mygen.co.uk) - see LICENSE/LICENSE-CC-BY-NC-SA/NOTICE\n\u00a7o- Support version : \u00a7a1.21.60+\n\u00a7o- Creator Youtube : \u00a7a@shadowgamer100k\n\u00a7o- Note : \u00a7cIf you want to make review about this addon mention my channel or use my mcpdl link",
   "min_engine_version": [
    1,
    21,
@@ -20,7 +20,7 @@
   "version": [
    3,
    3,
-   2
+   3
   ]
  },
  "modules": [
@@ -30,7 +30,7 @@
    "version": [
     3,
     3,
-    2
+    3
    ]
   },
   {
@@ -41,7 +41,7 @@
    "version": [
     3,
     3,
-    2
+    3
    ]
   }
  ],
@@ -51,7 +51,7 @@
    "version": [
     3,
     3,
-    2
+    3
    ]
   },
   {
