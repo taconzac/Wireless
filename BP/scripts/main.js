@@ -1000,6 +1000,67 @@ system.runInterval(() => {
   }
 }, 1);
 
+// === TEMPORARY DIAGNOSTIC TRACE ===
+// Not a permanent feature - added to pin down a delivery bug that's
+// resisted static analysis (Nether-sourced transfers not delivering even
+// with both ends loaded and well clear of any height boundary). Sends the
+// hopper owner a chat message showing the *actual* runtime values Bedrock
+// hands back at every step of resolving a destination, so the real cause
+// shows up directly instead of continuing to guess from documentation.
+// Throttled to roughly once every 3 seconds per delivery attempt so it's
+// readable rather than flooding chat every tick. Remove once the root
+// cause is confirmed.
+const TRACE_INTERVAL_TICKS = 60;
+
+function traceDelivery(entity, sourceDimId, currentIdx, locStr, route, destDim, destDimError, targetBlock, blockError) {
+  try {
+    const ownerName = entity.getDynamicProperty("ownerName");
+    if (!ownerName) return;
+    const owner = world.getPlayers({ name: ownerName })[0];
+    if (!owner) return;
+
+    const lines = [`§b[TRACE] container_${currentIdx}`];
+    lines.push(`§7source dim id: §f"${sourceDimId}"`);
+    lines.push(`§7stored value : §f"${locStr}"`);
+
+    if (!route) {
+      lines.push(`§c could not parse the stored entry`);
+      owner.sendMessage(lines.join("\n"));
+      return;
+    }
+    lines.push(
+      `§7parsed route : §fdim="${route.dimensionId}" x=${route.x} y=${route.y} z=${route.z}`,
+    );
+
+    if (destDimError) {
+      lines.push(
+        `§c world.getDimension("${route.dimensionId}") THREW: ${destDimError.name ?? "?"}: ${destDimError.message ?? destDimError}`,
+      );
+      owner.sendMessage(lines.join("\n"));
+      return;
+    }
+    lines.push(`§a getDimension OK -> resolved dim.id = "${destDim.id}"`);
+
+    if (blockError) {
+      lines.push(
+        `§c getBlock() THREW: ${blockError.name ?? "?"}: ${blockError.message ?? blockError}`,
+      );
+      owner.sendMessage(lines.join("\n"));
+      return;
+    }
+    if (!targetBlock) {
+      lines.push(`§e getBlock() returned undefined (unloaded chunk, or no block resolved)`);
+      owner.sendMessage(lines.join("\n"));
+      return;
+    }
+    const inv = targetBlock.getComponent("inventory");
+    lines.push(
+      `§a getBlock() OK -> typeId="${targetBlock.typeId}" hasInventory=${!!inv}`,
+    );
+    owner.sendMessage(lines.join("\n"));
+  } catch (e) {}
+}
+
 export function processDistribution(entity, sourceInv, dim) {
   const count = entity.getDynamicProperty("containerCount") || 0;
   const distMode = entity.getDynamicProperty("distMode") || 0;
@@ -1028,6 +1089,8 @@ export function processDistribution(entity, sourceInv, dim) {
       // before cross-dimensional routing existed - they always meant "same
       // dimension as the source hopper", so that's still exactly right.
       const route = parseRouteEntry(locStr, dim.id);
+      const shouldTrace = route && system.currentTick % TRACE_INTERVAL_TICKS === 0;
+      let destDim, destDimError, targetBlock, blockError;
 
       if (route) {
         // world.getDimension() just resolves a handle - unlike getBlock, it
@@ -1035,7 +1098,12 @@ export function processDistribution(entity, sourceInv, dim) {
         // throws for a valid id. It's wrapped anyway in case stored data is
         // ever corrupted, matching the file's existing defensive style.
         try {
-          const destDim = world.getDimension(route.dimensionId);
+          destDim = world.getDimension(route.dimensionId);
+        } catch (e) {
+          destDimError = e;
+        }
+
+        if (destDim) {
           chunkLoaderManager.ensureLoaded(destDim, route);
 
           // destDim.getBlock() throws LocationInUnloadedChunkError instead
@@ -1046,14 +1114,20 @@ export function processDistribution(entity, sourceInv, dim) {
           // the source and let next tick's retry pick it up once the chunk
           // comes up.
           try {
-            const targetBlock = destDim.getBlock(route);
+            targetBlock = destDim.getBlock(route);
             const targetInv = targetBlock?.getComponent("inventory")?.container;
 
             if (targetInv) {
               remaining = addItemsToInventory(targetInv, item, remaining);
             }
-          } catch (e) {}
-        } catch (e) {}
+          } catch (e) {
+            blockError = e;
+          }
+        }
+      }
+
+      if (shouldTrace) {
+        traceDelivery(entity, dim.id, currentIdx, locStr, route, destDim, destDimError, targetBlock, blockError);
       }
 
       currentIdx = (currentIdx + 1) % count;

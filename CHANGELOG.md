@@ -1,5 +1,36 @@
 # Changelog
 
+## 3.2.3 (temporary diagnostic build)
+
+Y=40 in the Nether for both sender and receiver rules out the height-
+boundary theory from 3.2.2 - that fix was real and worth keeping, but it
+wasn't the (or the only) cause of the reported Nether→Nether / Nether→
+Overworld delivery failure. Static analysis of `@minecraft/server`'s
+actual type definitions couldn't conclusively settle whether the format
+mismatch theory from the original 3.2.1 was real either. Rather than ship
+another guess, this version adds an in-game trace so the next test run
+produces direct evidence instead of more speculation.
+
+### Added
+
+- A temporary diagnostic trace in `processDistribution()`. Roughly once
+  every 3 seconds per delivery attempt (throttled so it's readable, not
+  spammy), the hopper's owner gets a chat message showing the *actual*
+  runtime values at each step: the raw stored `container_N` string, the
+  parsed dimension id and coordinates, whether `world.getDimension()`
+  resolved successfully or threw (with the real error name/message), and
+  whether `getBlock()` returned a real block with an inventory component,
+  returned `undefined`, or threw.
+- This is not a permanent feature — it'll be removed once the actual cause
+  is confirmed from real trace output rather than continued guessing.
+
+### How to use it
+
+Stand near a Nether-to-Nether (or Nether-to-Overworld) hopper pair with an
+item flowing through the source, and watch chat. A `§b[TRACE]` message
+should appear roughly every 3 seconds while the item is stuck. Whatever
+line it stops at (or the exact error text it shows) is the real answer.
+
 ## 3.2.2
 
 3.2.1 is reverted as of this version — it's not part of this history. It
