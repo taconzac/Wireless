@@ -1,5 +1,55 @@
 # Changelog
 
+## 3.2.0
+
+### Added
+
+- Cross-dimensional routing. A Wireless Hopper can now route to a
+  destination in a *different* dimension: Overworld↔Nether, Overworld↔End,
+  and Nether↔End, in addition to same-dimension routing.
+  - `scripts/RouteEntry.js` (new) — `formatRouteEntry()` /
+    `parseRouteEntry()` extend the routing string stored in each
+    `container_N` dynamic property from the old dimension-less `"x,y,z"` to
+    `"dimensionId,x,y,z"`, using exactly the string Bedrock's own
+    `Dimension.id` getter returns (so it round-trips through
+    `world.getDimension()` without guessing a format). `shortDimName()`
+    gives a short OW/NETHER/END tag for menus.
+  - **Backward compatible by construction, not by migration**: legacy
+    3-part entries (no dimension field) are never rewritten in storage —
+    `parseRouteEntry()` just resolves them against the reading hopper's own
+    current dimension every time, exactly matching what they always meant.
+    Old saves are read, never touched.
+  - The linking wizard's source-hopper dropdown now searches all three
+    dimensions (same enumeration pattern the dashboard already used)
+    instead of only the player's current one — without this, a player
+    standing at a destination could still only ever pick a same-dimension
+    source, no matter what the storage format supported. Each candidate's
+    dimension is shown in its dropdown label.
+  - The recursion-loop guard (a hopper can't route into its own input) and
+    the duplicate-connection check now both compare dimension in addition
+    to coordinates, since coordinates alone are ambiguous across
+    dimensions.
+  - `processDistribution()` resolves each destination's own dimension via
+    `world.getDimension()` before touching it, instead of assuming the
+    source hopper's dimension.
+  - The Routing Table menu now shows a dimension tag next to each linked
+    destination's coordinates. The range-border particle effect skips
+    drawing connection lines to cross-dimension destinations (an Overworld↔Nether
+    coordinate line would just be a meaningless trail through unrelated
+    coordinate spaces) — the link still works, it's just not drawn.
+  - **No changes were needed in `ChunkLoaderManager.js`.** Its dedupe key
+    was already `dimension.id + coordinates`, so a destination loader was
+    always scoped per-dimension; passing it the correct destination
+    `Dimension` object (rather than the source's) was the only thing
+    required, confirming loaders dedupe correctly even when different
+    dimensions' hoppers route to the same destination.
+- Verified with a dedicated integration harness covering: Overworld→Nether,
+  Nether→Overworld, End→Overworld, a legacy dimension-less entry still
+  resolving correctly, cross-dimension loader dedupe (two hoppers in two
+  different dimensions routing to the same destination share one loader),
+  and orphaned-loader purging across all three dimensions independently
+  (restart compatibility) — 16/16 checks passing.
+
 ## 3.1.0
 
 ### Removed

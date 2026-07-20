@@ -7,6 +7,7 @@
  */
 import { addItemsToInventory } from "./InventoryUtils.js";
 import { keyFor } from "./ChunkLoaderManager.js";
+import { formatRouteEntry, parseRouteEntry, shortDimName } from "./RouteEntry.js";
 
 function fakeInventory(size) {
   const slots = new Array(size).fill(null);
@@ -107,12 +108,75 @@ function testChunkLoaderKeysAreUniquePerDimensionAndLocation(failures) {
   );
 }
 
+function testRouteEntryRoundTripsThroughFormatAndParse(failures) {
+  const str = formatRouteEntry("minecraft:nether", 123, 64, -456);
+  const parsed = parseRouteEntry(str, "minecraft:overworld");
+  assert(
+    parsed &&
+      parsed.dimensionId === "minecraft:nether" &&
+      parsed.x === 123 &&
+      parsed.y === 64 &&
+      parsed.z === -456,
+    "route entry: format -> parse round-trips dimension and coordinates exactly",
+    failures,
+  );
+}
+
+function testRouteEntryFallsBackToSourceDimensionForLegacyEntries(failures) {
+  const legacy = "123,64,-456"; // v2.5/v3.0-3.1 format: no dimension field
+  const parsed = parseRouteEntry(legacy, "minecraft:the_end");
+  assert(
+    parsed &&
+      parsed.dimensionId === "minecraft:the_end" &&
+      parsed.x === 123 &&
+      parsed.y === 64 &&
+      parsed.z === -456,
+    "route entry: a dimension-less legacy entry resolves to the caller's fallback dimension",
+    failures,
+  );
+}
+
+function testRouteEntryHandlesMissingOrMalformedInput(failures) {
+  assert(
+    parseRouteEntry(undefined, "minecraft:overworld") === null,
+    "route entry: an empty/undefined entry parses to null instead of throwing",
+    failures,
+  );
+  assert(
+    parseRouteEntry("not,enough", "minecraft:overworld") === null,
+    "route entry: a malformed entry (wrong part count) parses to null instead of throwing",
+    failures,
+  );
+}
+
+function testShortDimNameCoversAllThreeDimensions(failures) {
+  assert(
+    shortDimName("minecraft:overworld") === "OW",
+    "shortDimName: overworld maps to OW",
+    failures,
+  );
+  assert(
+    shortDimName("minecraft:nether") === "NETHER",
+    "shortDimName: nether maps to NETHER",
+    failures,
+  );
+  assert(
+    shortDimName("minecraft:the_end") === "END",
+    "shortDimName: the_end maps to END",
+    failures,
+  );
+}
+
 export function runSelfTests() {
   const failures = [];
   testStackingIntoPartialSlotBeforeEmpty(failures);
   testStackingReportsLeftoverWhenFull(failures);
   testStackingIgnoresMismatchedType(failures);
   testChunkLoaderKeysAreUniquePerDimensionAndLocation(failures);
+  testRouteEntryRoundTripsThroughFormatAndParse(failures);
+  testRouteEntryFallsBackToSourceDimensionForLegacyEntries(failures);
+  testRouteEntryHandlesMissingOrMalformedInput(failures);
+  testShortDimNameCoversAllThreeDimensions(failures);
 
   if (failures.length === 0) {
     console.log("[Wireless Hopper] Self-test: all checks passed.");

@@ -2,7 +2,10 @@ import { world, system } from "@minecraft/server";
 import { ModalFormData, ActionFormData } from "@minecraft/server-ui";
 import { chunkLoaderManager, purgeOrphanLoaders } from "./ChunkLoaderManager.js";
 import { addItemsToInventory } from "./InventoryUtils.js";
+import { formatRouteEntry, parseRouteEntry, shortDimName } from "./RouteEntry.js";
 import { runSelfTests } from "./selfTest.js";
+
+const DIMENSION_NAMES = ["overworld", "nether", "the_end"];
 
 // Constants
 const DEFAULT_COLLECT_RANGE = 3;
@@ -85,7 +88,7 @@ function getReceivedSignal(block) {
 system.run(() => {
   runSelfTests();
 
-  for (const dimName of ["overworld", "nether", "the_end"]) {
+  for (const dimName of DIMENSION_NAMES) {
     try {
       const dim = world.getDimension(dimName);
       purgeOrphanLoaders(dim);
@@ -172,7 +175,7 @@ world.beforeEvents.itemUse.subscribe((ev) => {
 
 function showGlobalDashboard(player) {
   const hoppers = [];
-  ["overworld", "nether", "the_end"].forEach((dimName) => {
+  DIMENSION_NAMES.forEach((dimName) => {
     const dim = world.getDimension(dimName);
     const dimHoppers = dim.getEntities({ typeId: ENTITY_ID });
     dimHoppers.forEach((h) => {
@@ -269,9 +272,21 @@ world.beforeEvents.playerInteractWithBlock.subscribe((ev) => {
     }
 
     system.run(() => {
-      const myHoppers = player.dimension
-        .getEntities({ typeId: ENTITY_ID })
-        .filter((h) => h && h.getDynamicProperty("ownerName") === player.name);
+      // Search every dimension, not just the player's current one - this is
+      // what actually makes cross-dimensional routing reachable through the
+      // wizard. Without it, a player standing at an Overworld destination
+      // could still only ever pick an Overworld source hopper, no matter
+      // what the routing storage format supports. Same enumeration pattern
+      // showGlobalDashboard() already uses.
+      const myHoppers = [];
+      for (const dimName of DIMENSION_NAMES) {
+        const searchDim = world.getDimension(dimName);
+        for (const h of searchDim.getEntities({ typeId: ENTITY_ID })) {
+          if (h && h.getDynamicProperty("ownerName") === player.name) {
+            myHoppers.push(h);
+          }
+        }
+      }
 
       if (myHoppers.length === 0) {
         player.playSound("note.bass");
@@ -284,9 +299,10 @@ world.beforeEvents.playerInteractWithBlock.subscribe((ev) => {
       const names = myHoppers.map((h, i) => {
         const customName = h.getDynamicProperty("customName");
         const displayName = customName ? `§e${customName}§r` : `Unit ${i + 1}`;
-        return `${displayName} @ ${Math.floor(h.location.x)},${Math.floor(
-          h.location.y,
-        )},${Math.floor(h.location.z)}`;
+        const dimTag = shortDimName(h.dimension.id);
+        return `${displayName} [${dimTag}] @ ${Math.floor(
+          h.location.x,
+        )},${Math.floor(h.location.y)},${Math.floor(h.location.z)}`;
       });
 
       new ModalFormData()
@@ -303,12 +319,16 @@ world.beforeEvents.playerInteractWithBlock.subscribe((ev) => {
             return;
           }
 
+          const sourceDimId = selected.dimension.id;
+          const destDimId = block.dimension.id;
+
           const hLoc = selected.location;
           const sourceX = Math.floor(hLoc.x);
           const sourceY = Math.floor(hLoc.y) - 1;
           const sourceZ = Math.floor(hLoc.z);
 
           if (
+            destDimId === sourceDimId &&
             block.location.x === sourceX &&
             block.location.y === sourceY &&
             block.location.z === sourceZ
@@ -330,21 +350,36 @@ world.beforeEvents.playerInteractWithBlock.subscribe((ev) => {
             return;
           }
 
-          const locStr = `${block.location.x},${block.location.y},${block.location.z}`;
-
           for (let i = 0; i < containerCount; i++) {
-            if (selected.getDynamicProperty(`container_${i}`) === locStr) {
+            const existing = parseRouteEntry(
+              selected.getDynamicProperty(`container_${i}`),
+              sourceDimId,
+            );
+            if (
+              existing &&
+              existing.dimensionId === destDimId &&
+              existing.x === block.location.x &&
+              existing.y === block.location.y &&
+              existing.z === block.location.z
+            ) {
               player.playSound("note.bass");
               player.sendMessage("§c[ERROR] Connection already established.");
               return;
             }
           }
 
-          // Registration is intentionally just this location string: it's
-          // all the ChunkLoaderManager needs later to spin up a temporary
-          // destination loader at delivery time. There is nothing to place
-          // and nothing further to configure - loading is activated
+          // Registration is intentionally just this location string (now
+          // dimension-tagged): it's all the ChunkLoaderManager needs later
+          // to spin up a temporary destination loader, in the correct
+          // dimension, at delivery time. There is nothing to place and
+          // nothing further to configure - loading is activated
           // automatically, per-transfer, and never kept on permanently.
+          const locStr = formatRouteEntry(
+            destDimId,
+            block.location.x,
+            block.location.y,
+            block.location.z,
+          );
           selected.setDynamicProperty(`container_${containerCount}`, locStr);
           selected.setDynamicProperty("containerCount", containerCount + 1);
 
@@ -478,7 +513,7 @@ world.beforeEvents.playerInteractWithBlock.subscribe((ev) => {
 
 function showMainMenu(entity, player) {
   const form = new ActionFormData()
-    .title("§l§3WIRELESS HOPPER §8[§fv3.0§8]")
+    .title("§l§3WIRELESS HOPPER §8[§fv3.2§8]")
     .body(
       `§7§o"Advanced Item Transportation Solution"§r\n\n` +
         `§7Status: §aONLINE\n` +
@@ -765,9 +800,17 @@ function showLinkedContainers(entity, player) {
     );
 
   for (let i = 0; i < count; i++) {
-    const loc = entity.getDynamicProperty(`container_${i}`);
-    if (loc)
-      form.button(`§lTerminate Link\n§r§7Target: ${loc}`, "textures/ui/cancel");
+    const route = parseRouteEntry(
+      entity.getDynamicProperty(`container_${i}`),
+      entity.dimension.id,
+    );
+    if (route) {
+      const dimTag = shortDimName(route.dimensionId);
+      form.button(
+        `§lTerminate Link\n§r§7Target: [${dimTag}] ${route.x}, ${route.y}, ${route.z}`,
+        "textures/ui/cancel",
+      );
+    }
   }
 
   form
@@ -804,7 +847,7 @@ function showRangeUpgradeInfo(entity, player) {
 
 // === MAIN LOGIC LOOP ===
 system.runInterval(() => {
-  for (const dimName of ["overworld", "nether", "the_end"]) {
+  for (const dimName of DIMENSION_NAMES) {
     const dim = world.getDimension(dimName);
     const hoppers = dim.getEntities({ typeId: ENTITY_ID });
 
@@ -967,23 +1010,35 @@ export function processDistribution(entity, sourceInv, dim) {
     // 15s keep-alive resets on every attempt, satisfied or not.
     while (remaining > 0 && loops < count) {
       const locStr = entity.getDynamicProperty(`container_${currentIdx}`);
-      if (locStr) {
-        const [x, y, z] = locStr.split(",").map(Number);
-        chunkLoaderManager.ensureLoaded(dim, { x, y, z });
+      // dim.id is the fallback for legacy (dimension-less) entries created
+      // before cross-dimensional routing existed - they always meant "same
+      // dimension as the source hopper", so that's still exactly right.
+      const route = parseRouteEntry(locStr, dim.id);
 
-        // dim.getBlock() throws LocationInUnloadedChunkError instead of
-        // returning null when the destination chunk isn't loaded yet - this
-        // is the normal state right after ensureLoaded() has just kicked off
-        // loading (or when the chunk isn't reachable at all). Treat it the
-        // same as "no inventory there yet": leave the item in the source and
-        // let next tick's retry pick it up once the chunk comes up.
+      if (route) {
+        // world.getDimension() just resolves a handle - unlike getBlock, it
+        // doesn't require the target chunk to be loaded, so this never
+        // throws for a valid id. It's wrapped anyway in case stored data is
+        // ever corrupted, matching the file's existing defensive style.
         try {
-          const targetBlock = dim.getBlock({ x, y, z });
-          const targetInv = targetBlock?.getComponent("inventory")?.container;
+          const destDim = world.getDimension(route.dimensionId);
+          chunkLoaderManager.ensureLoaded(destDim, route);
 
-          if (targetInv) {
-            remaining = addItemsToInventory(targetInv, item, remaining);
-          }
+          // destDim.getBlock() throws LocationInUnloadedChunkError instead
+          // of returning null when the destination chunk isn't loaded yet -
+          // this is the normal state right after ensureLoaded() has just
+          // kicked off loading (or when the chunk isn't reachable at all).
+          // Treat it the same as "no inventory there yet": leave the item in
+          // the source and let next tick's retry pick it up once the chunk
+          // comes up.
+          try {
+            const targetBlock = destDim.getBlock(route);
+            const targetInv = targetBlock?.getComponent("inventory")?.container;
+
+            if (targetInv) {
+              remaining = addItemsToInventory(targetInv, item, remaining);
+            }
+          } catch (e) {}
         } catch (e) {}
       }
 
@@ -1112,12 +1167,18 @@ function showRangeBorder(entity, range) {
       });
     }
 
-    // Also show connection lines if debug is on
+    // Also show connection lines if debug is on. Only drawn for
+    // same-dimension destinations - a straight line between an Overworld
+    // and a Nether/End coordinate would just be a meaningless particle
+    // trail through unrelated coordinate spaces, so cross-dimension links
+    // are silently skipped here (they still work; they just aren't drawn).
     const count = entity.getDynamicProperty("containerCount") || 0;
+    const sourceDimId = dim.id;
     for (let j = 0; j < count; j++) {
       const locStr = entity.getDynamicProperty(`container_${j}`);
-      if (locStr) {
-        const [tx, ty, tz] = locStr.split(",").map(Number);
+      const route = parseRouteEntry(locStr, sourceDimId);
+      if (route && route.dimensionId === sourceDimId) {
+        const { x: tx, y: ty, z: tz } = route;
         const steps = 15;
         for (let k = 0; k <= steps; k++) {
           const t = k / steps;

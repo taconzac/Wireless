@@ -16,11 +16,13 @@ README.md   (this file)
 Everything under `BP/` and `RP/` except `BP/scripts/` is byte-for-byte
 identical to Wireless Hopper v2.5 (blocks, items, entities, recipes, models,
 textures) — the wrench, the hopper block/entity, filters, channels, range
-upgrades, redstone modes, crafting, and UI text are all unchanged. Two
-things were rewritten in `scripts/`: the chunk-loading implementation
-(v3.0), and, as of v3.1, the fuel system was removed entirely — hoppers
-now run unconditionally from the moment they're placed. See CHANGELOG.md
-for the full list of what changed in each version.
+upgrades, redstone modes, crafting, and UI text are all unchanged. Three
+things were changed in `scripts/`: the chunk-loading implementation (v3.0),
+the fuel system was removed entirely as of v3.1 (hoppers run
+unconditionally from the moment they're placed), and cross-dimensional
+routing was added as of v3.2 (a hopper can now route to a destination in a
+different dimension). See CHANGELOG.md for the full list of what changed
+in each version.
 
 ## Architecture
 
@@ -99,24 +101,37 @@ chunk isn't ready yet: `dim.getBlock()`/`getComponent("inventory")` comes
 back empty, the item stays put, and the next tick tries again after
 `ensureLoaded` has had another chance to bring the chunk up.
 
-### Cross-dimension routing (not supported — inherited, unchanged)
+### Cross-dimensional routing
 
-A hopper cannot route items from the Nether to the Overworld (or any other
-dimension pair). This isn't a gap introduced by this rewrite: `container_N`
-has always been stored as a bare `"x,y,z"` string with no dimension field,
-and the linking wizard (`world.beforeEvents.playerInteractWithBlock`) only
-ever lists the player's own hoppers in `player.dimension` against a
-destination `block` that is necessarily in that same dimension — you
-physically cannot right-click a block in a dimension you're not standing
-in. `processDistribution()` looks up every destination in the same `dim`
-object the source hopper's own loop iteration passed in. Changing this
-would mean storing a dimension id per route and reworking the linking UI
-to pair across dimensions (e.g. by coordinates instead of "stand in front
-of it") — a real feature addition, not a chunk-loading change, so I left it
-alone per "do not redesign the add-on." The chunk-loading mechanism itself
-has no such restriction: `ensureLoaded()` just uses whatever `dimension`
-object it's handed, so Nether-to-Nether or End-to-End destinations load
-exactly the same way Overworld ones do.
+As of 3.2, a hopper can route to a destination in a *different* dimension:
+Overworld↔Nether, Overworld↔End, Nether↔End, alongside ordinary
+same-dimension routing. Two things had to change to make this possible —
+storage format and the linking UI — and neither touches transfer logic,
+chunk loading, filters, or anything else:
+
+- **Storage** (`scripts/RouteEntry.js`): `container_N` now stores
+  `"dimensionId,x,y,z"` instead of the old dimension-less `"x,y,z"`. The
+  dimension id is exactly the string Bedrock's own `Dimension.id` getter
+  returned for the destination block at link time, so resolving it later
+  is just `world.getDimension(thatSameString)` — no guessing at "overworld"
+  vs "minecraft:overworld" formatting. Old 3-part entries are still read
+  correctly (resolved against whichever dimension the source hopper is
+  currently in, exactly what they always meant) and are never rewritten in
+  place — this is backward compatibility by tolerant reading, not by a
+  migration pass.
+- **Linking wizard**: the source-hopper dropdown used to search only
+  `player.dimension` — so even with dimension-aware storage, a player
+  standing at an Overworld destination could never have picked a Nether
+  hopper as the source, no matter what the storage format supported. It
+  now searches all three dimensions (the same enumeration
+  `showGlobalDashboard()` already used), with each candidate's dimension
+  shown in its label. The destination's dimension is just whatever
+  dimension the player is standing in when they link, same as before.
+
+`ChunkLoaderManager.js` required **no changes at all** — its dedupe key was
+already `dimension.id + coordinates`, so a loader was always scoped to its
+destination's own dimension; `processDistribution()` just had to pass it
+the destination's `Dimension` object instead of assuming the source's.
 
 ### Known Bedrock platform limitation
 
@@ -180,6 +195,18 @@ this is a meaningful test by first running it against the pre-fix code:
 destination crashed `processDistribution()` uncaught, which is the actual
 bug the fix above addresses.
 
+For cross-dimensional routing (3.2), a second harness stood up three
+independent fake dimensions (Overworld/Nether/End, each with its own
+loaded-state, inventory, and loader-entity list) and drove real production
+code through: Overworld→Nether, Nether→Overworld, End→Overworld (with a
+wrong-dimension-inventory guard — confirming an item sent to the Nether
+does *not* also show up in the Overworld's own inventory), a legacy
+dimension-less entry still resolving to the source's own dimension, two
+hoppers in two different dimensions routing to the same destination
+sharing exactly one loader, expiry across all three dimensions, and
+orphaned-loader purging in each dimension independently (restart
+compatibility). 16/16 checks passed.
+
 ### What I could not verify myself
 
 This is a coding environment without a Minecraft Bedrock client, so I
@@ -208,3 +235,35 @@ following before relying on this in a real world:
       chunk loading).
 - [ ] Confirm the world loads and functions with no experimental toggles
       enabled at all.
+
+### Manual tests for cross-dimensional routing (3.2)
+
+- [ ] Overworld → Nether: place a source hopper in the Overworld, travel to
+      the Nether, stand at a chest there and link (the Overworld hopper
+      should appear in the dropdown, tagged `[OW]`). Send an item from the
+      Overworld side; confirm it arrives in the Nether chest.
+- [ ] Nether → Overworld, and End → Overworld: same shape, reversed and
+      from the End.
+- [ ] Nether → End direct (no Overworld hop).
+- [ ] A single hopper with both a same-dimension route *and* a
+      cross-dimension route configured at once — confirm both deliver
+      independently.
+- [ ] Two different hoppers, in two different dimensions, both routing to
+      the same destination chest — confirm only one loader keeps that
+      chest's chunk loaded (no duplicate loaders, no double-delivery races).
+- [ ] Link a cross-dimension route, then check the Routing Table menu shows
+      the correct `[OW]`/`[NETHER]`/`[END]` tag next to it.
+- [ ] Try to link a hopper to its own input across dimensions (should be
+      impossible by construction, since the destination dimension is always
+      wherever you're standing when you link — just confirm the recursion
+      guard still fires correctly for genuine same-dimension self-loops).
+- [ ] A world that already has same-dimension-only links from v3.0/3.1 —
+      confirm they still work unchanged after upgrading to 3.2, with no
+      relinking.
+- [ ] Cross-dimension destination that's currently unreachable (e.g. Nether
+      destination while no one has been there this session) — confirm the
+      item waits safely in the source rather than being lost, and delivers
+      once someone visits that Nether region.
+- [ ] Server restart with active cross-dimension routes — confirm no
+      orphaned loaders survive in any of the three dimensions, and routes
+      keep working after the restart.
