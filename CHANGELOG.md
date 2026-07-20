@@ -1,5 +1,48 @@
 # Changelog
 
+## 3.2.5
+
+Root cause confirmed directly from an in-game trace (not guessed): a
+Nether-sourced hopper's own routing entries were found stored in two
+different formats -
+`container_0 = "minecraft:nether,13,40,9"`,
+`container_1 = "nether,13,40,12"`,
+`container_2 = "minecraft:nether,15,40,14"` -
+on the exact same hopper. `Dimension.id` returns the `"minecraft:"`-
+prefixed form at runtime (this settles the ambiguity earlier attempts
+couldn't resolve from documentation alone), but different links had been
+written at different times under different builds, some capturing the
+prefixed form directly and some (briefly, under the build that added
+normalization before it was reverted) capturing the short form. Whichever
+form `world.getDimension()` doesn't accept fails to resolve, silently
+(caught by the caller's own defensive try/catch) - so routes in the
+"wrong" format simply never transported, forever, with no visible error.
+
+### Fixed
+
+- `RouteEntry.js` again normalizes every dimension id (`normalizeDimensionId()`,
+  applied inside both `formatRouteEntry()` and `parseRouteEntry()`) down to
+  the short `overworld`/`nether`/`the_end` form - the only form this addon
+  has used successfully with `world.getDimension()` since v2.5. This is
+  the same fix from the original (reverted) 3.2.1, re-added on its own -
+  **not** the hopper registry/pending-link system from that version, which
+  was solving a different, non-problem (a hopper not appearing in the
+  wizard while its dimension is unloaded is expected Minecraft behavior).
+  Because normalization happens on *read*, every previously-written route -
+  regardless of which format it happened to get stored in - resolves
+  correctly from now on with no migration step.
+- Verified directly against the reported scenario: a hopper with three
+  routes stored in the exact mixed formats from the trace above, each
+  tested in isolation (no fallback route to mask a per-route failure).
+  Confirmed this reproduces the bug precisely against the pre-fix code
+  (the two `"minecraft:"`-prefixed routes fail to deliver, the short-form
+  one works) and that all three deliver correctly with the fix.
+
+The temporary `[TRACE-GATE]` / `[TRACE]` diagnostic messages from 3.2.3/
+3.2.4 are left in for one more round in case anything else is still
+wrong - they'll be removed once this is confirmed fixed in an actual
+world.
+
 ## 3.2.4 (temporary diagnostic build)
 
 3.2.3's trace never fired at all during actual testing - meaning the
