@@ -12,8 +12,9 @@ const DEFAULT_COLLECT_RANGE = 3;
 const MAX_COLLECT_RANGE = 10;
 const COOLDOWN_DURATION = 1000;
 
-// TEMPORARY: throttle for the diagnostic trace added to chase the
-// Nether-sourced delivery bug (see traceDelivery/traceGating below).
+// Throttle for the [TRACE-CRASH] chat reports below, so a hopper stuck in
+// a recurring failure messages its owner roughly once every 3 seconds
+// instead of every tick.
 const TRACE_INTERVAL_TICKS = 60;
 
 function traceOwner(entity) {
@@ -985,9 +986,6 @@ system.runInterval(() => {
             z: entity.location.z,
           });
         }
-        if (system.currentTick % TRACE_INTERVAL_TICKS === 0) {
-          traceGating(entity, dim, isLocked, undefined, entity.getDynamicProperty("containerCount") || 0);
-        }
         continue;
       }
 
@@ -1101,9 +1099,6 @@ system.runInterval(() => {
 
       // === 2. DISTRIBUTE ===
       const containerCount = entity.getDynamicProperty("containerCount") || 0;
-      if (system.currentTick % TRACE_INTERVAL_TICKS === 0) {
-        traceGating(entity, dim, isLocked, inventory, containerCount);
-      }
       if (entity.hasTag("Teleportable") && inventory) {
         if (containerCount > 0) {
           processDistribution(entity, inventory, dim);
@@ -1131,91 +1126,6 @@ system.runInterval(() => {
     }
   }
 }, 1);
-
-// === TEMPORARY DIAGNOSTIC TRACE ===
-// Not a permanent feature - added to pin down a delivery bug that's
-// resisted static analysis (Nether-sourced transfers not delivering even
-// with both ends loaded and well clear of any height boundary). Sends the
-// hopper owner a chat message showing the *actual* runtime values Bedrock
-// hands back at every step, so the real cause shows up directly instead of
-// continuing to guess from documentation. Throttled (TRACE_INTERVAL_TICKS,
-// declared near the top constants) to roughly once every 3 seconds per
-// hopper so it's readable rather than flooding chat every tick. Remove
-// once the root cause is confirmed.
-
-/**
- * Fires once per throttle window for every hopper the main loop processes,
- * regardless of whether it currently has an item to send - this is
- * upstream of traceDelivery() below, and covers every gating condition
- * between "hopper exists" and "processDistribution() gets called at all".
- * If traceDelivery never fires but this does, the chain is breaking here.
- */
-function traceGating(entity, dim, isLocked, inventory, containerCount) {
-  try {
-    const owner = traceOwner(entity);
-    if (!owner) return;
-
-    const lines = [`§d[TRACE-GATE] hopper in "${dim.id}"`];
-    lines.push(`§7isLocked (redstone)   : §f${isLocked}`);
-    lines.push(`§7Teleportable tag     : §f${entity.hasTag("Teleportable")}`);
-    lines.push(`§7own inventory found  : §f${!!inventory}`);
-    lines.push(`§7containerCount       : §f${containerCount}`);
-
-    for (let i = 0; i < containerCount; i++) {
-      const raw = entity.getDynamicProperty(`container_${i}`);
-      lines.push(`§7  container_${i} raw   : §f"${raw}"`);
-    }
-
-    owner.sendMessage(lines.join("\n"));
-  } catch (e) {}
-}
-
-function traceDelivery(entity, sourceDimId, currentIdx, locStr, route, destDim, destDimError, targetBlock, blockError) {
-  try {
-    const owner = traceOwner(entity);
-    if (!owner) return;
-
-    const lines = [`§b[TRACE] container_${currentIdx}`];
-    lines.push(`§7source dim id: §f"${sourceDimId}"`);
-    lines.push(`§7stored value : §f"${locStr}"`);
-
-    if (!route) {
-      lines.push(`§c could not parse the stored entry`);
-      owner.sendMessage(lines.join("\n"));
-      return;
-    }
-    lines.push(
-      `§7parsed route : §fdim="${route.dimensionId}" x=${route.x} y=${route.y} z=${route.z}`,
-    );
-
-    if (destDimError) {
-      lines.push(
-        `§c world.getDimension("${route.dimensionId}") THREW: ${destDimError.name ?? "?"}: ${destDimError.message ?? destDimError}`,
-      );
-      owner.sendMessage(lines.join("\n"));
-      return;
-    }
-    lines.push(`§a getDimension OK -> resolved dim.id = "${destDim.id}"`);
-
-    if (blockError) {
-      lines.push(
-        `§c getBlock() THREW: ${blockError.name ?? "?"}: ${blockError.message ?? blockError}`,
-      );
-      owner.sendMessage(lines.join("\n"));
-      return;
-    }
-    if (!targetBlock) {
-      lines.push(`§e getBlock() returned undefined (unloaded chunk, or no block resolved)`);
-      owner.sendMessage(lines.join("\n"));
-      return;
-    }
-    const inv = targetBlock.getComponent("inventory");
-    lines.push(
-      `§a getBlock() OK -> typeId="${targetBlock.typeId}" hasInventory=${!!inv}`,
-    );
-    owner.sendMessage(lines.join("\n"));
-  } catch (e) {}
-}
 
 export function processDistribution(entity, sourceInv, dim) {
   const count = entity.getDynamicProperty("containerCount") || 0;
@@ -1245,7 +1155,6 @@ export function processDistribution(entity, sourceInv, dim) {
       // before cross-dimensional routing existed - they always meant "same
       // dimension as the source hopper", so that's still exactly right.
       const route = parseRouteEntry(locStr, dim.id);
-      const shouldTrace = route && system.currentTick % TRACE_INTERVAL_TICKS === 0;
       let destDim, destDimError, targetBlock, blockError;
 
       if (route) {
@@ -1280,10 +1189,6 @@ export function processDistribution(entity, sourceInv, dim) {
             blockError = e;
           }
         }
-      }
-
-      if (shouldTrace) {
-        traceDelivery(entity, dim.id, currentIdx, locStr, route, destDim, destDimError, targetBlock, blockError);
       }
 
       currentIdx = (currentIdx + 1) % count;

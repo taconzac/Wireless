@@ -1,5 +1,28 @@
 # Changelog
 
+## 3.2.9
+
+The periodic `[TRACE-GATE]`/`[TRACE]` chat messages (roughly every 3
+seconds per hopper) had done their job - Nether-to-Nether transport and
+the 3.2.8 height-limit crash are both confirmed fixed - and were now just
+noise during normal play, as reported.
+
+### Changed
+
+- Removed the periodic diagnostic messages entirely: the `traceGating()`
+  and `traceDelivery()` functions and their call sites in the main loop
+  and `processDistribution()` are gone, along with the now-dead
+  `shouldTrace` check. Hoppers no longer message their owner on a timer
+  just for existing.
+- Left the `[TRACE-CRASH]` messages from 3.2.7/3.2.8 in place - those only
+  fire when something actually goes wrong (not on a fixed schedule during
+  normal operation), and stay throttled so a genuine recurring failure
+  still can't flood chat.
+- Verified with an isolated test that real item delivery (source
+  inventory -> hopper -> destination inventory) still works correctly with
+  the trace calls removed - this was a chat-only cleanup, no functional
+  logic changed.
+
 ## 3.2.8
 
 Nether-to-Nether transport is now confirmed working in-game. This build
