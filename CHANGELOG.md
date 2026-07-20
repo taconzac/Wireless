@@ -1,5 +1,38 @@
 # Changelog
 
+## 3.2.12
+
+3.2.11 fixed the wrong layer: it addressed the very-first-bootstrap race
+at link time, but the *same* `LocationInUnloadedChunkError` then showed
+up for an **Overworld** receiver too - proving this was never
+Nether-specific. The actual issue was the destination loader's ~15
+second idle timeout (`KEEP_LOADED_TICKS` in `ChunkLoaderManager.js`): once
+a destination went quiet for 15s, its loader despawned and the chunk went
+back to genuinely unloaded - and Bedrock's script API cannot force-load a
+chunk that's gone fully cold without a player physically standing in it.
+So every destination was only ever one idle period away from becoming
+permanently unreachable again, in any dimension, which is exactly the
+"receiver isn't loading the chunk like it should" behavior reported.
+
+### Fixed
+
+- Removed the 15-second idle expiry entirely. A destination's chunk
+  loader now stays alive for as long as *any* hopper anywhere still has a
+  route pointing at it, checked by a lightweight scan roughly every 5
+  seconds (`pruneUnreferencedLoaders()` in `main.js`,
+  `ChunkLoaderManager.pruneUnreferenced()`) instead of a per-destination
+  countdown timer. A loader is only ever removed once nothing references
+  its destination anymore (route deleted, or the owning hopper broken).
+- This is what the addon's own description was always meant to do
+  ("automatic destination chunk loading") - the fix is to stop the loader
+  from being able to go cold in the first place while it's still needed,
+  not to make failure less frequent.
+- Verified with isolated tests: a loader whose destination is still
+  referenced by a hopper's route survives a prune pass; one nothing
+  references anymore is removed; the prune scan itself stays silent on
+  ticks outside its ~5s interval; and a full source-to-destination
+  delivery still works end-to-end against the new loader lifecycle.
+
 ## 3.2.11
 
 The [TRACE-DELIVER] diagnostic from 3.2.10 found it: every configured

@@ -1,6 +1,6 @@
 import { world, system } from "@minecraft/server";
 import { ModalFormData, ActionFormData } from "@minecraft/server-ui";
-import { chunkLoaderManager, purgeOrphanLoaders } from "./ChunkLoaderManager.js";
+import { chunkLoaderManager, purgeOrphanLoaders, keyFor } from "./ChunkLoaderManager.js";
 import { addItemsToInventory } from "./InventoryUtils.js";
 import { formatRouteEntry, parseRouteEntry, shortDimName } from "./RouteEntry.js";
 import { runSelfTests } from "./selfTest.js";
@@ -929,8 +929,45 @@ function showRangeUpgradeInfo(entity, player) {
     .show(player);
 }
 
+// Roughly every 5 seconds, remove any chunk loader whose destination no
+// hopper anywhere still routes to - the only safe time to let one go,
+// since Bedrock can't reload a fully-unloaded chunk without a player
+// physically there (see ChunkLoaderManager.js).
+const LOADER_PRUNE_INTERVAL_TICKS = 100;
+
+function pruneUnreferencedLoaders() {
+  const activeKeys = new Set();
+  for (const dimName of DIMENSION_NAMES) {
+    try {
+      const dim = world.getDimension(dimName);
+      for (const hopper of dim.getEntities({ typeId: ENTITY_ID })) {
+        if (!hopper) continue;
+        const count = hopper.getDynamicProperty("containerCount") || 0;
+        for (let i = 0; i < count; i++) {
+          const route = parseRouteEntry(
+            hopper.getDynamicProperty(`container_${i}`),
+            dim.id,
+          );
+          if (!route) continue;
+          try {
+            const destDim = world.getDimension(route.dimensionId);
+            activeKeys.add(
+              keyFor(destDim.id, Math.floor(route.x), Math.floor(route.y), Math.floor(route.z)),
+            );
+          } catch (e) {}
+        }
+      }
+    } catch (e) {}
+  }
+  chunkLoaderManager.pruneUnreferenced(activeKeys);
+}
+
 // === MAIN LOGIC LOOP ===
 system.runInterval(() => {
+  if (system.currentTick % LOADER_PRUNE_INTERVAL_TICKS === 0) {
+    pruneUnreferencedLoaders();
+  }
+
   for (const dimName of DIMENSION_NAMES) {
     // Neither of these was guarded, unlike almost every other call in this
     // file - if either throws for one specific dimension, it would abort
