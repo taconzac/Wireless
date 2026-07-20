@@ -150,6 +150,26 @@ world.afterEvents.explosion.subscribe((explosionEvent) => {
 
       for (const hopper of hoppers) {
         if (!hopper) continue;
+        // Remove the block along with the entity. This used to only kill
+        // the entity, leaving the block behind with nothing backing it: a
+        // "ghost" hopper that looks completely normal, is entirely
+        // non-functional (every dynamic property - routing, filters,
+        // everything - lives on the entity), never appears in any
+        // entity-based lookup or trace ever again, and previously gave the
+        // player zero feedback when interacting with it. Ghast fireballs
+        // alone make this a routine occurrence in the Nether specifically.
+        try {
+          const loc = hopper.location;
+          const blockLoc = {
+            x: Math.floor(loc.x),
+            y: Math.floor(loc.y),
+            z: Math.floor(loc.z),
+          };
+          const block = dimension.getBlock(blockLoc);
+          if (block?.typeId === BLOCK_ID) {
+            block.setType("minecraft:air");
+          }
+        } catch (e) {}
         hopper.kill();
       }
     } catch (error) {
@@ -481,7 +501,21 @@ world.beforeEvents.playerInteractWithBlock.subscribe((ev) => {
         location: block.location,
         maxDistance: 1.5,
       })[0];
-      if (!safeHopper) return;
+      if (!safeHopper) {
+        // The block exists (that's how this handler triggered at all) but
+        // its backing entity doesn't - every dynamic property (routing,
+        // filters, fuel-era settings, everything) lived on that entity, so
+        // it's gone with it. Most likely cause: a nearby explosion killed
+        // the entity without removing the block (see the explosion handler
+        // fix below) - this used to happen silently with zero feedback,
+        // which is exactly what made a "ghost" hopper like this so hard to
+        // diagnose. Now at least it says so.
+        player.playSound("note.bass");
+        player.sendMessage(
+          "§c[!] No Wireless Hopper found here - its entity is gone (most likely killed by a nearby explosion at some point). This block is now non-functional; break and replace it to fix.",
+        );
+        return;
+      }
       player.playSound("ui.button.click");
       showMainMenu(safeHopper, player);
     });
@@ -497,7 +531,12 @@ world.beforeEvents.playerInteractWithBlock.subscribe((ev) => {
         location: block.location,
         maxDistance: 1.5,
       })[0];
-      if (!safeHopper) return;
+      if (!safeHopper) {
+        player.onScreenDisplay.setActionBar(
+          "§c[!] No entity here - block is non-functional (likely killed by a nearby explosion). Break and replace it.",
+        );
+        return;
+      }
 
       const range =
         safeHopper.getDynamicProperty("CollectRange") || DEFAULT_COLLECT_RANGE;

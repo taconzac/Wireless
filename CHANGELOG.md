@@ -1,5 +1,47 @@
 # Changelog
 
+## 3.2.6
+
+Prompted by a sharp observation: even after the 3.2.5 fix, the Nether
+hopper in question had *never once* appeared in any trace output at
+all - not the wrong one, none at all. If its entity were genuinely being
+processed by the main loop, it should trace on the same schedule as every
+other hopper regardless of what's wrong with its routing. The only way
+for that to be consistently, permanently true is if the entity simply
+doesn't exist anymore.
+
+### Fixed
+
+- The explosion handler (`world.afterEvents.explosion`) killed any
+  Wireless Hopper entity within 5 blocks of an explosion, but never
+  touched the block underneath it. Every dynamic property - routing data,
+  filters, everything - lives on that entity, so this left a "ghost"
+  hopper: a block that looks completely normal, is entirely
+  non-functional, never appears in any entity-based lookup or trace again
+  (there's no entity to find), and previously gave zero feedback when
+  interacted with. Ghast fireballs make this a routine occurrence in the
+  Nether specifically, which is consistent with everything reported: the
+  link was established successfully at some point (the entity existed
+  then), and nothing has worked since (something - almost certainly a
+  fireball - killed it afterward). The block is now removed along with the
+  entity, matching how manually breaking the hopper already worked, so
+  this exact scenario can't recur going forward.
+- Interacting with a Wireless Hopper block that has no backing entity
+  (whether from this or any other cause) now says so explicitly instead of
+  silently doing nothing - both the config menu and the plain status
+  display report "no entity found here" and suggest breaking and
+  replacing the block.
+- Verified the explosion handler now removes the block precisely when it
+  kills the entity, and that this doesn't otherwise change delivery
+  behavior.
+
+### Note
+
+This won't retroactively repair a hopper that's already in this state -
+its stored routing data is gone with the entity. If your Nether hopper
+still shows no `[TRACE-GATE]` message after this update, that's the
+confirmation: break the block and relink it fresh.
+
 ## 3.2.5
 
 Root cause confirmed directly from an in-game trace (not guessed): a
