@@ -1,5 +1,33 @@
 # Changelog
 
+## 3.2.10
+
+Reported: Overworld -> Nether transport still doesn't move items, even
+after visiting the Nether destination in person to create the link (so
+the "chunk was never loaded" explanation from 3.2.9 doesn't hold here -
+Overworld -> Overworld and Nether -> Nether both work fine, only a Nether
+*destination* fails). Nothing in `RouteEntry.js`/`ChunkLoaderManager.js`
+turned up an obvious dimension-specific bug on inspection, so rather than
+guess further, this build adds one small, targeted, throttled diagnostic
+instead of guessing blind.
+
+### Added (temporary)
+
+- `ChunkLoaderManager.ensureLoaded()` now returns whether a loader is
+  actually active at the destination, and the `spawnEntity` error if not,
+  instead of swallowing that outcome entirely.
+- A new `[TRACE-DELIVER]` message, throttled the same way past traces were
+  (roughly once every 3 seconds, and only while an item is still stuck
+  undelivered - stays silent on any successful delivery), reports exactly
+  which step is failing for a given route: dimension resolution, the
+  chunk loader's `spawnEntity`, or the destination's own `getBlock()`.
+- Verified with isolated tests: one confirms the trace correctly surfaces
+  a simulated "chunk loader can't spawn + getBlock throws" failure with
+  the right dimension/coordinates; another confirms a fully successful
+  delivery produces no trace message at all and still delivers the item.
+- Temporary, like every other diagnostic added in this series - will be
+  removed once the actual cause is found.
+
 ## 3.2.9
 
 The periodic `[TRACE-GATE]`/`[TRACE]` chat messages (roughly every 3

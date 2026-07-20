@@ -50,6 +50,13 @@ class ChunkLoaderManager {
    * a chunk no player has ever been near); this silently no-ops and the
    * caller's own per-tick retry loop tries again next tick until the
    * destination becomes reachable.
+   *
+   * @returns {{ active: boolean, spawnError?: unknown }} `active` is true
+   * if a loader is confirmed running at this destination (existing or
+   * freshly spawned) after this call; `spawnError`, when present, is the
+   * error `spawnEntity` threw on a failed attempt - exposed so a caller
+   * chasing "why doesn't this destination ever load" can report it
+   * instead of it being swallowed silently.
    */
   ensureLoaded(dimension, location) {
     const x = Math.floor(location.x);
@@ -61,7 +68,7 @@ class ChunkLoaderManager {
     const existing = this.loaders.get(key);
     if (existing && isEntityValid(existing.entity)) {
       existing.expireAtTick = expireAtTick;
-      return;
+      return { active: true };
     }
 
     try {
@@ -72,10 +79,12 @@ class ChunkLoaderManager {
       });
       entity.triggerEvent(ACTIVATE_EVENT);
       this.loaders.set(key, { entity, expireAtTick });
-    } catch {
+      return { active: true };
+    } catch (spawnError) {
       // Destination not reachable yet (unloaded/ungenerated chunk, or
       // dimension not currently loaded). No entity was created, so there
       // is nothing to clean up — just retry on the next call.
+      return { active: false, spawnError };
     }
   }
 

@@ -1127,6 +1127,51 @@ system.runInterval(() => {
   }
 }, 1);
 
+// TEMPORARY: see the call site in processDistribution() below.
+function traceUndelivered(entity, route, destDim, destDimError, loaderResult, targetBlock, blockError) {
+  try {
+    const owner = traceOwner(entity);
+    if (!owner) return;
+
+    if (!route) {
+      owner.sendMessage("§c[TRACE-DELIVER] container entry did not parse to a route at all");
+      return;
+    }
+
+    const lines = [
+      `§b[TRACE-DELIVER] -> dim="${route.dimensionId}" x=${route.x} y=${route.y} z=${route.z}`,
+    ];
+
+    if (destDimError) {
+      lines.push(`§c world.getDimension() THREW: ${destDimError.name ?? "?"}: ${destDimError.message ?? destDimError}`);
+      owner.sendMessage(lines.join("\n"));
+      return;
+    }
+    lines.push(`§a getDimension OK -> "${destDim.id}"`);
+
+    if (loaderResult && !loaderResult.active) {
+      const e = loaderResult.spawnError;
+      lines.push(`§c chunk loader spawnEntity THREW: ${e?.name ?? "?"}: ${e?.message ?? e}`);
+    } else {
+      lines.push(`§a chunk loader active`);
+    }
+
+    if (blockError) {
+      lines.push(`§c getBlock() THREW: ${blockError.name ?? "?"}: ${blockError.message ?? blockError}`);
+      owner.sendMessage(lines.join("\n"));
+      return;
+    }
+    if (!targetBlock) {
+      lines.push(`§e getBlock() returned undefined`);
+      owner.sendMessage(lines.join("\n"));
+      return;
+    }
+    const inv = targetBlock.getComponent("inventory");
+    lines.push(`§a getBlock() OK -> typeId="${targetBlock.typeId}" hasInventory=${!!inv}`);
+    owner.sendMessage(lines.join("\n"));
+  } catch (e) {}
+}
+
 export function processDistribution(entity, sourceInv, dim) {
   const count = entity.getDynamicProperty("containerCount") || 0;
   const distMode = entity.getDynamicProperty("distMode") || 0;
@@ -1155,7 +1200,7 @@ export function processDistribution(entity, sourceInv, dim) {
       // before cross-dimensional routing existed - they always meant "same
       // dimension as the source hopper", so that's still exactly right.
       const route = parseRouteEntry(locStr, dim.id);
-      let destDim, destDimError, targetBlock, blockError;
+      let destDim, destDimError, targetBlock, blockError, loaderResult;
 
       if (route) {
         // world.getDimension() just resolves a handle - unlike getBlock, it
@@ -1169,7 +1214,7 @@ export function processDistribution(entity, sourceInv, dim) {
         }
 
         if (destDim) {
-          chunkLoaderManager.ensureLoaded(destDim, route);
+          loaderResult = chunkLoaderManager.ensureLoaded(destDim, route);
 
           // destDim.getBlock() throws LocationInUnloadedChunkError instead
           // of returning null when the destination chunk isn't loaded yet -
@@ -1189,6 +1234,16 @@ export function processDistribution(entity, sourceInv, dim) {
             blockError = e;
           }
         }
+      }
+
+      // TEMPORARY: reported "Overworld -> Nether transport doesn't move
+      // items even after visiting the Nether destination to link it"
+      // (Overworld -> Overworld and Nether -> Nether both work). Narrow,
+      // throttled trace to find out which of the three steps above is
+      // actually failing for a still-undelivered item, without going back
+      // to unconditional per-hopper tracing. Remove once found.
+      if (remaining > 0 && system.currentTick % TRACE_INTERVAL_TICKS === 0) {
+        traceUndelivered(entity, route, destDim, destDimError, loaderResult, targetBlock, blockError);
       }
 
       currentIdx = (currentIdx + 1) % count;
