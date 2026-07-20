@@ -12,6 +12,35 @@ const DEFAULT_COLLECT_RANGE = 3;
 const MAX_COLLECT_RANGE = 10;
 const COOLDOWN_DURATION = 1000;
 
+// TEMPORARY: throttle for the diagnostic trace added to chase the
+// Nether-sourced delivery bug (see traceDelivery/traceGating below).
+const TRACE_INTERVAL_TICKS = 60;
+
+function traceOwner(entity) {
+  try {
+    const ownerName = entity.getDynamicProperty("ownerName");
+    if (ownerName) {
+      const byName = world.getPlayers({ name: ownerName })[0];
+      if (byName) return byName;
+    }
+  } catch (e) {}
+
+  // Fallback: an exact ownerName match failing (case sensitivity, timing,
+  // anything) would otherwise mean the trace silently sends nothing at
+  // all - message whichever player is actually standing near the hopper
+  // instead, since that's who's testing it anyway.
+  try {
+    const nearby = entity.dimension.getEntities({
+      type: "minecraft:player",
+      location: entity.location,
+      maxDistance: 32,
+    })[0];
+    if (nearby) return nearby;
+  } catch (e) {}
+
+  return null;
+}
+
 // Type IDs
 const ENTITY_ID = "wr:wireless_hopper";
 const BLOCK_ID = "wirless:wirless_hopper";
@@ -878,6 +907,9 @@ system.runInterval(() => {
             z: entity.location.z,
           });
         }
+        if (system.currentTick % TRACE_INTERVAL_TICKS === 0) {
+          traceGating(entity, dim, isLocked, undefined, entity.getDynamicProperty("containerCount") || 0);
+        }
         continue;
       }
 
@@ -990,9 +1022,12 @@ system.runInterval(() => {
       }
 
       // === 2. DISTRIBUTE ===
+      const containerCount = entity.getDynamicProperty("containerCount") || 0;
+      if (system.currentTick % TRACE_INTERVAL_TICKS === 0) {
+        traceGating(entity, dim, isLocked, inventory, containerCount);
+      }
       if (entity.hasTag("Teleportable") && inventory) {
-        const count = entity.getDynamicProperty("containerCount") || 0;
-        if (count > 0) {
+        if (containerCount > 0) {
           processDistribution(entity, inventory, dim);
         }
       }
@@ -1005,18 +1040,42 @@ system.runInterval(() => {
 // resisted static analysis (Nether-sourced transfers not delivering even
 // with both ends loaded and well clear of any height boundary). Sends the
 // hopper owner a chat message showing the *actual* runtime values Bedrock
-// hands back at every step of resolving a destination, so the real cause
-// shows up directly instead of continuing to guess from documentation.
-// Throttled to roughly once every 3 seconds per delivery attempt so it's
-// readable rather than flooding chat every tick. Remove once the root
-// cause is confirmed.
-const TRACE_INTERVAL_TICKS = 60;
+// hands back at every step, so the real cause shows up directly instead of
+// continuing to guess from documentation. Throttled (TRACE_INTERVAL_TICKS,
+// declared near the top constants) to roughly once every 3 seconds per
+// hopper so it's readable rather than flooding chat every tick. Remove
+// once the root cause is confirmed.
+
+/**
+ * Fires once per throttle window for every hopper the main loop processes,
+ * regardless of whether it currently has an item to send - this is
+ * upstream of traceDelivery() below, and covers every gating condition
+ * between "hopper exists" and "processDistribution() gets called at all".
+ * If traceDelivery never fires but this does, the chain is breaking here.
+ */
+function traceGating(entity, dim, isLocked, inventory, containerCount) {
+  try {
+    const owner = traceOwner(entity);
+    if (!owner) return;
+
+    const lines = [`§d[TRACE-GATE] hopper in "${dim.id}"`];
+    lines.push(`§7isLocked (redstone)   : §f${isLocked}`);
+    lines.push(`§7Teleportable tag     : §f${entity.hasTag("Teleportable")}`);
+    lines.push(`§7own inventory found  : §f${!!inventory}`);
+    lines.push(`§7containerCount       : §f${containerCount}`);
+
+    for (let i = 0; i < containerCount; i++) {
+      const raw = entity.getDynamicProperty(`container_${i}`);
+      lines.push(`§7  container_${i} raw   : §f"${raw}"`);
+    }
+
+    owner.sendMessage(lines.join("\n"));
+  } catch (e) {}
+}
 
 function traceDelivery(entity, sourceDimId, currentIdx, locStr, route, destDim, destDimError, targetBlock, blockError) {
   try {
-    const ownerName = entity.getDynamicProperty("ownerName");
-    if (!ownerName) return;
-    const owner = world.getPlayers({ name: ownerName })[0];
+    const owner = traceOwner(entity);
     if (!owner) return;
 
     const lines = [`§b[TRACE] container_${currentIdx}`];

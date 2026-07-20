@@ -1,5 +1,33 @@
 # Changelog
 
+## 3.2.4 (temporary diagnostic build)
+
+3.2.3's trace never fired at all during actual testing - meaning the
+problem is upstream of where it was placed (inside `processDistribution`,
+which is only reached after several gating conditions already pass). This
+version adds trace coverage for every step *before* that point too, plus
+hardens the trace's own delivery so a failed lookup can't be the reason
+nothing showed up.
+
+### Added
+
+- `traceGating()`: fires once per throttle window per hopper, before
+  `processDistribution()` is ever reached, regardless of whether it has an
+  item to send. Reports whether the hopper is redstone-locked, whether its
+  "Teleportable" tag is set, whether its own underlying inventory was
+  found, its `containerCount`, and the raw `container_N` string for each
+  configured route. If this never appears either, the hopper isn't being
+  reached by the main loop at all (or the trace delivery itself is
+  failing - see below).
+- `traceOwner()` now falls back to whichever player is standing within 32
+  blocks of the hopper if looking up the owner by name fails for any
+  reason (case sensitivity, timing, anything) - a silent failure there
+  would by itself explain zero messages ever appearing, regardless of
+  whether the rest of the addon is working correctly.
+- Re-verified delivery behavior is unchanged (the trace only adds chat
+  messages, never alters what actually happens) against the existing
+  regression harness.
+
 ## 3.2.3 (temporary diagnostic build)
 
 Y=40 in the Nether for both sender and receiver rules out the height-
