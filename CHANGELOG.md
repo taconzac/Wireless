@@ -1,5 +1,42 @@
 # Changelog
 
+## 3.2.2
+
+3.2.1 is reverted as of this version — it's not part of this history. It
+added a persistent hopper registry and a pending-link queue to solve a
+hopper not appearing in the linking wizard while its dimension was
+unloaded. On reflection that's expected Minecraft behavior (a dimension
+nobody is in isn't simulated, so of course a live `getEntities()` scan
+can't find anything there), not an add-on bug, and the registry was a much
+bigger change than that observation warranted. 3.2.2 restores 3.2.0's
+wizard exactly (live search, no registry, no pending-link queue) and
+applies one small, targeted fix instead.
+
+### Fixed
+
+- The real remaining problem: Nether→Nether and Nether→Overworld transfers
+  not delivering even with both hoppers loaded and adjacent. Found by
+  re-auditing every `getBlock()` call in the file for the one that wasn't
+  guarded like all the others: computing a hopper's own underlying
+  container used
+  `dim.getBlock({ x: blockLoc.x, y: blockLoc.y - 1, z: blockLoc.z })`
+  with no try/catch. The Nether's usable height is roughly Y 0-127 with its
+  floor sitting right around Y 0-4 — a hopper placed near that floor has
+  its underlying-container position land just below Y 0, outside world
+  bounds. Every other boundary-sensitive call in this file already guards
+  against exactly this; this one didn't, so it could throw uncaught and
+  abort the rest of that tick's processing for every hopper after it in
+  iteration order (nothing upstream catches it) — the affected hopper never
+  reaches the point where it would call `processDistribution()`, so it
+  never delivers, regardless of destination. This is a pre-existing defect
+  from v2.5, unrelated to cross-dimensional routing; it likely only
+  surfaced now because testing cross-dimension links prompted building (and
+  testing) Nether hoppers for the first time. Now wrapped in try/catch,
+  consistent with the rest of the file: an out-of-bounds position is
+  treated the same as "no inventory here" rather than crashing.
+- Re-verified `processDistribution()` still delivers correctly afterward
+  with no regressions.
+
 ## 3.2.0
 
 ### Added

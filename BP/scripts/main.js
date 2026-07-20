@@ -897,10 +897,24 @@ system.runInterval(() => {
       const isWhitelist = entity.getDynamicProperty("isWhitelist") ?? false;
       const xpMode = entity.getDynamicProperty("xpMode") ?? false;
 
-      const inventoryComp = dim
-        .getBlock({ x: blockLoc.x, y: blockLoc.y - 1, z: blockLoc.z })
-        ?.getComponent("inventory");
-      const inventory = inventoryComp?.container;
+      // A hopper placed near a dimension's height floor/ceiling (the
+      // Nether's usable range is roughly Y 0-127) can have its own
+      // underlying-container position land just outside world bounds -
+      // this call was the one unguarded getBlock() in the whole file, so an
+      // out-of-bounds hopper would throw uncaught here and abort the rest
+      // of that tick's processing for every hopper after it in iteration
+      // order (all of it, not just this one - there's nothing catching
+      // upstream). Guarded to match every other boundary-sensitive call in
+      // this file: treat it the same as "no inventory here".
+      let inventory;
+      try {
+        const inventoryComp = dim
+          .getBlock({ x: blockLoc.x, y: blockLoc.y - 1, z: blockLoc.z })
+          ?.getComponent("inventory");
+        inventory = inventoryComp?.container;
+      } catch (e) {
+        inventory = undefined;
+      }
 
       const hopperCenter = {
         x: entity.location.x,
