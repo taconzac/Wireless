@@ -599,11 +599,12 @@ world.beforeEvents.playerInteractWithBlock.subscribe((ev) => {
     });
   }
 
-  // Holding the wrench and interacting with a myGen chunk loader shows the
-  // border of the single chunk it sits in - not its configured radius
-  // (see showChunkLoaderBorder for why), and regardless of whether it's
-  // currently active.
-  if (itemStack?.typeId === WRENCH_ID && block.typeId === "chunkloader:chunk_loader") {
+  // TEMPORARY: reported not working on iOS. Dropped the wrench-only
+  // condition so ANY interaction with a myGen chunk loader shows the
+  // border, to isolate whether the handler/particle spawn itself works on
+  // iOS at all, versus something specific to the itemStack/wrench check.
+  // Revert to requiring the wrench once confirmed.
+  if (block.typeId === "chunkloader:chunk_loader") {
     system.run(() => {
       showChunkLoaderBorder(block);
     });

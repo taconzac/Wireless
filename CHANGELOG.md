@@ -1,5 +1,21 @@
 # Changelog
 
+## 3.3.2
+
+Reported: the chunk-loader border doesn't seem to work on iOS.
+
+### Changed (temporary)
+
+- Dropped the wrench requirement for the border - it now shows on *any*
+  interaction with a myGen chunk loader block, regardless of what's held
+  (or empty hand). This is a diagnostic step: if the border now shows up
+  on iOS, the problem was specifically the held-item/wrench check; if it
+  still doesn't show at all, the block-interaction handler itself isn't
+  firing there, which is a different and bigger problem. Once we know
+  which, this goes back to requiring the wrench.
+- Verified in isolation that the border now fires with no itemStack at
+  all (previously it required `itemStack?.typeId === WRENCH_ID`).
+
 ## 3.3.1
 
 Simplified the wrench chunk-loader border from 3.3.0, per feedback: it was
