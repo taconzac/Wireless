@@ -1,5 +1,32 @@
 # Changelog
 
+## 3.3.4
+
+Feedback on 3.3.3: semi-working, but the trigger shouldn't be "interact
+with a chunk loader block while holding the wrench" - it should just be
+holding the wrench, period, showing the border of whatever chunk(s) the
+player is currently standing in/near.
+
+### Changed
+
+- Removed the interact-with-a-chunk-loader-block requirement entirely.
+  The border is now shown passively: a per-tick check (throttled to once
+  every ~3 seconds per player) looks at whether each online player is
+  currently holding `wr:wrench` in their selected hotbar slot, and if so
+  renders the border around their current position - no block interaction
+  needed at all. This is much closer to BedrockChunkVisualizer's own
+  original design (continuously checking every player for a specific held
+  item), just with the wrench standing in for its "named compass"
+  condition instead of a one-shot interact event.
+- Fixed a throttle bug caught by this change's own test: the "last shown"
+  tracking defaulted to `0`, which is indistinguishable from
+  `system.currentTick` also being `0` right at world load - the very
+  first check would always wrongly skip. Now defaults to `-Infinity`.
+- Verified with an isolated test: border stays off for a player not
+  holding the wrench, shows up for one who is (with no block interaction
+  at all), respects the ~3s per-player throttle, and re-fires once that
+  window elapses. Wireless Hopper's own transport logic is unaffected.
+
 ## 3.3.3
 
 3.3.2's diagnostic didn't get a clear answer, but reported still not

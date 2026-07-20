@@ -223,6 +223,39 @@ system.runInterval(() => {
   }
 }, 20);
 
+// === CHUNK LOADER BORDER (myGen Chunk Loader integration) ===
+// Simply holding the wrench - anywhere, not tied to interacting with a
+// specific chunk loader block - shows the border of every chunk currently
+// loaded around the player's own position (their current chunk plus the
+// configured radius out from there). Throttled per-player so it doesn't
+// spam every tick. Mirrors BedrockChunkVisualizer's own original trigger
+// (continuously checking every player, once per throttle window) with the
+// wrench standing in for its "named compass" condition.
+const CHUNK_BORDER_INTERVAL_TICKS = 60; // ~3 seconds
+const lastChunkBorderShown = new Map(); // player.id -> tick last shown
+
+system.runInterval(() => {
+  for (const player of world.getPlayers()) {
+    try {
+      const inventory = player.getComponent("minecraft:inventory");
+      const held = inventory?.container?.getItem(player.selectedSlotIndex);
+      if (held?.typeId !== WRENCH_ID) continue;
+
+      // -Infinity, not 0, for "never shown yet" - system.currentTick is
+      // itself 0 right at world load, so 0 would wrongly look identical
+      // to "already shown at tick 0" and skip the very first check.
+      const last = lastChunkBorderShown.get(player.id) ?? -Infinity;
+      if (system.currentTick - last < CHUNK_BORDER_INTERVAL_TICKS) continue;
+      lastChunkBorderShown.set(player.id, system.currentTick);
+
+      const chunkX = Math.floor(player.location.x / 16);
+      const chunkZ = Math.floor(player.location.z / 16);
+      const radius = mygenChunkLoaderManager.getConfig().defaultRadius ?? 4;
+      chunkLoaderBorder.renderChunkBorders(player, chunkX, chunkZ, radius);
+    } catch (e) {}
+  }
+}, CHUNK_BORDER_INTERVAL_TICKS);
+
 // === FEATURE: GLOBAL DASHBOARD ===
 world.beforeEvents.itemUse.subscribe((ev) => {
   if (ev.itemStack.typeId !== WRENCH_ID) return;
@@ -607,21 +640,6 @@ world.beforeEvents.playerInteractWithBlock.subscribe((ev) => {
     });
   }
 
-  // Holding the wrench and interacting with a myGen chunk loader shows the
-  // border of every chunk it currently keeps loaded (its own chunk plus
-  // its configured radius out from there), regardless of whether it's
-  // currently active. Uses BedrockChunkVisualizer's particle system
-  // (CC BY-NC-SA 4.0) instead of the plain vanilla-particle border from
-  // 3.3.0/3.3.1, which wasn't showing up at all on iOS.
-  if (itemStack?.typeId === WRENCH_ID && block.typeId === "chunkloader:chunk_loader") {
-    system.run(() => {
-      const loc = block.location;
-      const chunkX = Math.floor(loc.x / 16);
-      const chunkZ = Math.floor(loc.z / 16);
-      const radius = mygenChunkLoaderManager.getConfig().defaultRadius ?? 4;
-      chunkLoaderBorder.renderChunkBorders(player, chunkX, chunkZ, radius);
-    });
-  }
 });
 
 // === MENU SYSTEMS ===
