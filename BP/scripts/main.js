@@ -930,13 +930,18 @@ system.runInterval(() => {
       dim = world.getDimension(dimName);
       hoppers = dim.getEntities({ typeId: ENTITY_ID });
     } catch (e) {
-      try {
-        for (const p of world.getDimension(dimName).getPlayers()) {
-          p.sendMessage(
-            `§c[TRACE-CRASH] getEntities() failed in "${dimName}": ${e?.name ?? "?"}: ${e?.message ?? e}`,
-          );
-        }
-      } catch (e2) {}
+      // Same spam risk as the per-entity catch below: this runs every tick,
+      // so an unthrottled message here would flood chat 20x/sec for as long
+      // as the dimension keeps failing.
+      if (system.currentTick % TRACE_INTERVAL_TICKS === 0) {
+        try {
+          for (const p of world.getDimension(dimName).getPlayers()) {
+            p.sendMessage(
+              `§c[TRACE-CRASH] getEntities() failed in "${dimName}": ${e?.name ?? "?"}: ${e?.message ?? e}`,
+            );
+          }
+        } catch (e2) {}
+      }
       continue;
     }
 
@@ -949,7 +954,19 @@ system.runInterval(() => {
         y: Math.floor(entity.location.y),
         z: Math.floor(entity.location.z),
       };
-      const block = dim.getBlock(blockLoc);
+      // A hopper sitting right at the world's height ceiling/floor can have
+      // its OWN position throw LocationOutOfWorldBoundariesError here -
+      // confirmed in-game for an overworld hopper at y=321 (one above the
+      // 320 build limit). Unguarded, that would abort this entity for the
+      // outer per-entity catch every single tick with nothing to recover
+      // from; guarded to match the container-below lookup further down,
+      // treating it the same as "no block here yet".
+      let block;
+      try {
+        block = dim.getBlock(blockLoc);
+      } catch (e) {
+        continue;
+      }
       if (!block) continue;
 
       // REDSTONE CONTROL LOGIC
@@ -1093,14 +1110,23 @@ system.runInterval(() => {
         }
       }
       } catch (e) {
-        try {
-          const owner = traceOwner(entity);
-          if (owner) {
-            owner.sendMessage(
-              `§c[TRACE-CRASH] error processing a hopper in "${dim.id}": ${e?.name ?? "?"}: ${e?.message ?? e}`,
-            );
-          }
-        } catch (e2) {}
+        // Unlike the getBlock() guard above, this outer catch is the
+        // fallback for genuinely unanticipated errors - so it's not skipped
+        // silently. But this loop runs every tick (20x/sec): without a
+        // throttle, one hopper stuck in a recurring failure spams the same
+        // message to its owner 20 times a second, forever, which is exactly
+        // what was reported. Throttled the same way as every other trace
+        // call in this file.
+        if (system.currentTick % TRACE_INTERVAL_TICKS === 0) {
+          try {
+            const owner = traceOwner(entity);
+            if (owner) {
+              owner.sendMessage(
+                `§c[TRACE-CRASH] error processing a hopper in "${dim.id}": ${e?.name ?? "?"}: ${e?.message ?? e}`,
+              );
+            }
+          } catch (e2) {}
+        }
       }
     }
   }

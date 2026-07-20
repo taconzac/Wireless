@@ -1,5 +1,44 @@
 # Changelog
 
+## 3.2.8
+
+Nether-to-Nether transport is now confirmed working in-game. This build
+addresses the next issue surfaced by 3.2.7's new crash visibility: an
+Overworld hopper repeatedly reporting
+`[TRACE-CRASH] error processing a hopper in "minecraft:overworld":
+LocationOutOfWorldBoundariesError: Trying to access location
+(-13.0, 321.0, -4.0) which is outside of the world boundaries` -
+Y=321 is one block above the Overworld's build limit.
+
+### Fixed
+
+- The hopper's own `dim.getBlock(blockLoc)` call - looking up its own
+  block, right at the top of the per-entity loop - was still completely
+  unguarded, unlike the container-below lookup a few lines later which
+  already treats an out-of-bounds/unloaded location as "nothing here" and
+  moves on. A hopper sitting at the world's height ceiling/floor throws
+  here every single tick, forever. 3.2.7's outer per-entity `catch` still
+  caught it (so it didn't cascade into other hoppers), which is exactly
+  why it started showing up as `[TRACE-CRASH]` instead of failing
+  silently - but it doesn't explain the message away, and the hopper still
+  did nothing useful every tick it ran. Guarded with the same
+  try/catch-and-skip pattern already used for the container-below lookup.
+- Separately: both `[TRACE-CRASH]` messages added in 3.2.7 (the per-
+  dimension `getEntities()` failure and the per-entity catch-all) had no
+  throttle, unlike every other trace message in this file. For a hopper
+  hitting the same error every tick, that means the identical message
+  gets sent to chat 20 times a second, forever - which is exactly the
+  "chat keeps saying this" spam reported. Both are now throttled on the
+  same `TRACE_INTERVAL_TICKS` schedule as `traceGating`/`traceDelivery`.
+- Verified with an isolated test: a hopper positioned so its own
+  `getBlock()` throws `LocationOutOfWorldBoundariesError` no longer
+  crashes to the outer catch, and a second, ordinary hopper processed
+  right after it in the same tick still runs normally. A second test
+  confirms the catch-all `[TRACE-CRASH]` message fires once on a
+  throttle-eligible tick and then stays silent for the next 59 ticks
+  instead of repeating every tick.
+- Not yet tested in-game: Nether-to-Overworld transport.
+
 ## 3.2.7
 
 The explosion theory from 3.2.6 doesn't hold up: this world is on Peaceful
