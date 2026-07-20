@@ -916,10 +916,32 @@ function showRangeUpgradeInfo(entity, player) {
 // === MAIN LOGIC LOOP ===
 system.runInterval(() => {
   for (const dimName of DIMENSION_NAMES) {
-    const dim = world.getDimension(dimName);
-    const hoppers = dim.getEntities({ typeId: ENTITY_ID });
+    // Neither of these was guarded, unlike almost every other call in this
+    // file - if either throws for one specific dimension, it would abort
+    // the rest of THIS tick's loop entirely (every dimension after it in
+    // DIMENSION_NAMES, every hopper in them), every single tick, forever.
+    // Since "overworld" is processed first, that would look exactly like
+    // "Overworld hoppers always work, Nether/End hoppers never do" -
+    // regardless of what's actually throwing. Wrapped so one failure can't
+    // cascade, and surfaced directly to chat (not just the content log)
+    // since that's what's actually being watched while debugging this.
+    let dim, hoppers;
+    try {
+      dim = world.getDimension(dimName);
+      hoppers = dim.getEntities({ typeId: ENTITY_ID });
+    } catch (e) {
+      try {
+        for (const p of world.getDimension(dimName).getPlayers()) {
+          p.sendMessage(
+            `§c[TRACE-CRASH] getEntities() failed in "${dimName}": ${e?.name ?? "?"}: ${e?.message ?? e}`,
+          );
+        }
+      } catch (e2) {}
+      continue;
+    }
 
     for (const entity of hoppers) {
+      try {
       if (!entity) continue;
 
       const blockLoc = {
@@ -1069,6 +1091,16 @@ system.runInterval(() => {
         if (containerCount > 0) {
           processDistribution(entity, inventory, dim);
         }
+      }
+      } catch (e) {
+        try {
+          const owner = traceOwner(entity);
+          if (owner) {
+            owner.sendMessage(
+              `§c[TRACE-CRASH] error processing a hopper in "${dim.id}": ${e?.name ?? "?"}: ${e?.message ?? e}`,
+            );
+          }
+        } catch (e2) {}
       }
     }
   }

@@ -1,5 +1,57 @@
 # Changelog
 
+## 3.2.7
+
+The explosion theory from 3.2.6 doesn't hold up: this world is on Peaceful
+(no hostile mobs, no Ghasts), and a *freshly placed* Nether hopper - which
+can't possibly be an old "ghost" - still never appeared in any trace
+message either. That means the entity genuinely exists and is loaded, but
+the main loop still never reaches it. The only way that's true for every
+single tick, permanently, is if something is throwing an uncaught
+exception partway through that tick's work - and since Overworld
+(processed first in `DIMENSION_NAMES`) always traces fine while Nether and
+presumably End never do, that fits perfectly: whatever throws does so
+while processing Nether, silently killing the rest of that tick for every
+dimension after it, forever.
+
+### Fixed
+
+- Found several calls in the main loop that were unguarded, unlike almost
+  everything else in this file: `dim.getEntities({typeId: ENTITY_ID})`
+  itself (enumerating hoppers per dimension), the hopper's own
+  `dim.getBlock(blockLoc)`, the item-vacuum's `dim.getEntities(...)` and
+  `itemEntity.getComponent("item").itemStack`, the XP-vacuum's
+  `dim.getEntities(...)`, and more. Any one of them throwing for a specific
+  dimension would silently abort every dimension processed after it in
+  `DIMENSION_NAMES` (`["overworld", "nether", "the_end"]`) for that tick -
+  which, if it happens on every tick, is indistinguishable from "Nether and
+  End hoppers are never processed at all."
+- Rather than guess which single call was responsible, the whole per-
+  dimension and per-hopper body of the main loop is now wrapped: a failure
+  processing one dimension no longer prevents the next dimension in the
+  list from running that same tick, and a failure processing one hopper no
+  longer prevents the rest of that dimension's hoppers from running.
+- Any such failure is now also reported directly to chat as
+  `[TRACE-CRASH]` (not just the content log), with the real error name and
+  message, for whichever players are in the affected dimension (or, for a
+  single hopper's failure, the hopper's owner). If this - or anything like
+  it - is what's actually been happening, this build will say so directly
+  instead of requiring more guessing.
+- Verified with a test that makes Nether's `getEntities()` throw
+  internally: confirmed this reproduces the exact symptom against the
+  pre-fix code (the callback throws uncaught, and `the_end` - processed
+  after `nether` - never runs that tick), and that the fixed code handles
+  it cleanly (no uncaught throw, and `the_end` still runs normally).
+
+### If this build still shows nothing for the Nether hopper
+
+That would mean the main loop genuinely isn't the problem, and whatever's
+actually happening is upstream of it entirely (possibly something about
+how or whether the Nether dimension's entities are being enumerated by the
+game at all in this specific world) - at that point the next step is
+almost certainly worth showing me the world/Realm setup directly rather
+than continuing to add more chat-trace instrumentation.
+
 ## 3.2.6
 
 Prompted by a sharp observation: even after the 3.2.5 fix, the Nether
