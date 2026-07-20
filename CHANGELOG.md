@@ -1,5 +1,38 @@
 # Changelog
 
+## 3.2.11
+
+The [TRACE-DELIVER] diagnostic from 3.2.10 found it: every configured
+Nether destination reported the exact same failure -
+`chunk loader spawnEntity THREW: LocationInUnloadedChunkError: ... not in
+a chunk currently loaded and ticking` - every single delivery attempt,
+for three separate destinations.
+
+### Fixed
+
+- The destination's chunk loader was only ever attempted from
+  `processDistribution()`, which only runs once an item has actually
+  reached the source hopper - in normal play, well after the player has
+  moved on from the destination (walked back through a portal to go load
+  the source side). By then nothing is keeping that Nether chunk loaded,
+  so `spawnEntity()` throws every time and the loader can never get its
+  first foothold. Overworld destinations happened to avoid this only by
+  chance of timing (player still nearby, or the destination close enough
+  to spawn/another loaded area) - it was never actually a different code
+  path, just a race this addon was already going to lose eventually.
+- Linking now calls `chunkLoaderManager.ensureLoaded()` immediately, at
+  the moment the connection is created - the one point where the
+  destination chunk is *guaranteed* loaded and ticking, since the player
+  is standing on it interacting with the block. This gives the loader its
+  required first foothold before the player ever has a chance to leave.
+- Verified with an isolated test: simulates the full wrench-link flow
+  (sneak + interact, pick source hopper from the wizard) and confirms the
+  chunk loader's `spawnEntity` is now called during linking itself - at
+  the correct destination coordinates - before any item is ever
+  delivered, and that the route is still recorded correctly. A negative
+  control (temporarily removing just the new call) confirms the test
+  actually fails without the fix.
+
 ## 3.2.10
 
 Reported: Overworld -> Nether transport still doesn't move items, even

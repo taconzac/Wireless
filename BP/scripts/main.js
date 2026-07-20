@@ -433,6 +433,21 @@ world.beforeEvents.playerInteractWithBlock.subscribe((ev) => {
           selected.setDynamicProperty(`container_${containerCount}`, locStr);
           selected.setDynamicProperty("containerCount", containerCount + 1);
 
+          // Bootstrap the destination's chunk loader right now, while we
+          // know for certain the chunk is loaded and ticking - the player
+          // is standing on it, interacting with `block`. Without this, the
+          // loader's very first spawnEntity attempt happens later, in
+          // processDistribution(), whenever an item first reaches the
+          // source hopper - almost always well after the player has moved
+          // on (e.g. walked back through a portal to load the source side).
+          // By then nothing keeps this chunk loaded, spawnEntity throws
+          // LocationInUnloadedChunkError every time, and the destination
+          // can never bootstrap - confirmed directly via [TRACE-DELIVER]
+          // reporting exactly that error for every configured Nether
+          // destination. Linking here first, while the chunk is guaranteed
+          // loaded, gives the loader its one required foothold.
+          chunkLoaderManager.ensureLoaded(block.dimension, block.location);
+
           player.sendMessage("§a[SUCCESS] Data link established.");
           player.playSound("random.orb");
           player.playSound("respawn_anchor.charge");
