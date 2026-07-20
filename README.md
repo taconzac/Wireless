@@ -96,6 +96,25 @@ chunk isn't ready yet: `dim.getBlock()`/`getComponent("inventory")` comes
 back empty, the item stays put, and the next tick tries again after
 `ensureLoaded` has had another chance to bring the chunk up.
 
+### Cross-dimension routing (not supported — inherited, unchanged)
+
+A hopper cannot route items from the Nether to the Overworld (or any other
+dimension pair). This isn't a gap introduced by this rewrite: `container_N`
+has always been stored as a bare `"x,y,z"` string with no dimension field,
+and the linking wizard (`world.beforeEvents.playerInteractWithBlock`) only
+ever lists the player's own hoppers in `player.dimension` against a
+destination `block` that is necessarily in that same dimension — you
+physically cannot right-click a block in a dimension you're not standing
+in. `processDistribution()` looks up every destination in the same `dim`
+object the source hopper's own loop iteration passed in. Changing this
+would mean storing a dimension id per route and reworking the linking UI
+to pair across dimensions (e.g. by coordinates instead of "stand in front
+of it") — a real feature addition, not a chunk-loading change, so I left it
+alone per "do not redesign the add-on." The chunk-loading mechanism itself
+has no such restriction: `ensureLoaded()` just uses whatever `dimension`
+object it's handed, so Nether-to-Nether or End-to-End destinations load
+exactly the same way Overworld ones do.
+
 ### Known Bedrock platform limitation
 
 Bedrock's Script API has no non-cheat way to force-load a chunk that no
@@ -142,6 +161,19 @@ requirement. I also ran this exact test suite standalone under Node.js
 (with `@minecraft/server` stubbed out) during development; all checks
 passed. I additionally validated every JSON file for syntax and ran
 `node --check` over every script — both clean.
+
+I also built a one-off executable integration harness (stubbed
+`@minecraft/server`/`@minecraft/server-ui`, not shipped in the pack) that
+drives the real, exported `processDistribution()` and `chunkLoaderManager`
+through a full destination lifecycle: destination unreachable for several
+ticks (no crash, item stays put, no loader spawned) → destination becomes
+reachable (item transfers on the very next tick, exactly one loader entity
+spawned) → a second hopper routing to the same destination (no duplicate
+loader) → 300+ ticks of inactivity (loader entity removed). I confirmed
+this is a meaningful test by first running it against the pre-fix code:
+`dim.getBlock()` throwing `LocationInUnloadedChunkError` on an unloaded
+destination crashed `processDistribution()` uncaught, which is the actual
+bug the fix above addresses.
 
 ### What I could not verify myself
 

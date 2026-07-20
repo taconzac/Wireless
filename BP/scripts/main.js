@@ -1027,7 +1027,7 @@ system.runInterval(() => {
   }
 }, 1);
 
-function processDistribution(entity, sourceInv, dim) {
+export function processDistribution(entity, sourceInv, dim) {
   const count = entity.getDynamicProperty("containerCount") || 0;
   const distMode = entity.getDynamicProperty("distMode") || 0;
   const trashMode = entity.getDynamicProperty("trashMode") ?? false;
@@ -1055,12 +1055,20 @@ function processDistribution(entity, sourceInv, dim) {
         const [x, y, z] = locStr.split(",").map(Number);
         chunkLoaderManager.ensureLoaded(dim, { x, y, z });
 
-        const targetBlock = dim.getBlock({ x, y, z });
-        const targetInv = targetBlock?.getComponent("inventory")?.container;
+        // dim.getBlock() throws LocationInUnloadedChunkError instead of
+        // returning null when the destination chunk isn't loaded yet - this
+        // is the normal state right after ensureLoaded() has just kicked off
+        // loading (or when the chunk isn't reachable at all). Treat it the
+        // same as "no inventory there yet": leave the item in the source and
+        // let next tick's retry pick it up once the chunk comes up.
+        try {
+          const targetBlock = dim.getBlock({ x, y, z });
+          const targetInv = targetBlock?.getComponent("inventory")?.container;
 
-        if (targetInv) {
-          remaining = addItemsToInventory(targetInv, item, remaining);
-        }
+          if (targetInv) {
+            remaining = addItemsToInventory(targetInv, item, remaining);
+          }
+        } catch (e) {}
       }
 
       currentIdx = (currentIdx + 1) % count;

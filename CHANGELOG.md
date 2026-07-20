@@ -60,6 +60,39 @@ crafting recipes — is unchanged from v2.5.
   entirely dead `scripts/vector.js`, whose static-method duplicated the
   distance/direction math already inlined in `main.js`.
 
+### Fixed
+
+- `processDistribution()`'s destination lookup (`dim.getBlock({x, y, z})`)
+  was unguarded. Bedrock's `Dimension.getBlock()` throws
+  `LocationInUnloadedChunkError` rather than returning `null` when the
+  target chunk isn't currently loaded — exactly the "destination not near
+  any player" case this whole feature exists to handle. Left unguarded,
+  that exception would abort the rest of that tick's hopper loop every
+  single tick a delivery was pending to an unloaded destination. It's now
+  wrapped in a try/catch, treated the same as "no inventory there yet."
+  Verified with an executable integration harness (stubbed
+  `@minecraft/server`) that reproduces the crash on the old code and
+  confirms the fixed code correctly: leaves the item in the source while
+  the destination is unreachable, transfers it the tick after the
+  destination becomes reachable, spawns exactly one loader entity, dedupes
+  a second hopper routing to the same destination, and expires the loader
+  after its keep-alive window.
+
+### Known limitation (inherited from v2.5, not introduced by this rewrite)
+
+Wireless Hopper has never supported cross-dimension routing. A `container_N`
+routing entry is stored as a bare `"x,y,z"` string with no dimension field,
+and the linking wizard only ever lists the *player's currently owned
+hoppers in their current dimension* against a destination block that is
+necessarily in that same dimension (you can't right-click a block in a
+different dimension). So a hopper in the Nether can only ever route to
+Nether destinations, Overworld to Overworld, and so on — this rewrite
+preserves that behavior unchanged rather than redesigning the routing
+format, per the "do not redesign the add-on" instruction. The chunk-loader
+mechanism itself has no such restriction — it works identically in every
+dimension, since `ensureLoaded()` is just handed whichever `dimension`
+object the caller is already operating in.
+
 ### Known platform limitation
 
 Bedrock's Script API has no non-cheat way to force-load a chunk that no
