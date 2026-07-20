@@ -1,0 +1,39 @@
+{
+  "format_version": "1.21.60",
+  "minecraft:block": {
+    "description": {
+      "identifier": "wirless:wirless_hopper",
+      "menu_category": {
+        "category": "equipment",
+        "group": "wr:wireless"
+      }
+    },
+    "components": {
+      "minecraft:display_name": "Wireless Hopper",
+      "tag:minecraft:is_pickaxe_item_destructible": {},
+      "minecraft:destructible_by_mining": {
+        "seconds_to_destroy": 10
+      },
+      "minecraft:selection_box": {
+        "origin": [-8, 0, -8],
+        "size": [16, 8, 16]
+      },
+      "minecraft:collision_box": {
+        "origin": [-8, 0, -8],
+        "size": [16, 8, 16]
+      },
+      "minecraft:material_instances": {
+        "*": {
+          "texture": "wireless_hopper",
+          "render_method": "opaque",
+          "face_dimming": true,
+          "ambient_occlusion": true
+        }
+      },
+      "minecraft:geometry": "geometry.wireless_hopper",
+      "minecraft:redstone_conductivity": {
+        "redstone_conductor": true
+      }
+    }
+  }
+}

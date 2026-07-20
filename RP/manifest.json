@@ -1,0 +1,44 @@
+{
+    "format_version": 2,
+    "metadata": {
+        "authors": [
+            "shadow"
+        ]
+    },
+    "header": {
+        "name": "Wireless Hopper 3.0 Resources",
+        "description": "§o- Support version : §a1.21.60+\n§o- Creator Youtube : §a@shadowgamer100k\n§o- Note : §cIf you want to make review about this addon mention my channel or use my mcpdl link",
+        "min_engine_version": [
+            1,
+            21,
+            60
+        ],
+        "uuid": "8dfd93cc-a4e2-499b-a445-1fdc7e78d66a",
+        "version": [
+            3,
+            0,
+            0
+        ]
+    },
+    "modules": [
+        {
+            "type": "resources",
+            "uuid": "3499c52d-8750-48d0-b449-eeae2ee45be6",
+            "version": [
+                3,
+                0,
+                0
+            ]
+        }
+    ],
+    "dependencies": [
+        {
+            "uuid": "cf8962dd-445e-4672-ac3c-85c95c25e38b",
+            "version": [
+                3,
+                0,
+                0
+            ]
+        }
+    ]
+}

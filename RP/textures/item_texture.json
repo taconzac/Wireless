@@ -1,0 +1,10 @@
+{
+	"texture_data": {
+	  "wirless": {
+		  "textures": "textures/blocks/wirless_hopper.png"
+	  },
+	  "wr:wrench": {
+		  "textures": "textures/items/wrench.png"
+	  }
+  }
+}

@@ -1,0 +1,64 @@
+{
+	"format_version": 2,
+	"metadata": {
+		"authors": [
+			"Shadow"
+		],
+		"product_type": "addon"
+	},
+	"header": {
+		"name": "Wireless Hopper 3.0",
+		"description": "§o- Automatic destination chunk loading (myGen tick_world architecture)\n§o- Support version : §a1.21.60+\n§o- Creator Youtube : §a@shadowgamer100k\n§o- Note : §cIf you want to make review about this addon mention my channel or use my mcpdl link",
+		"min_engine_version": [
+			1,
+			21,
+			60
+		],
+		"uuid": "cf8962dd-445e-4672-ac3c-85c95c25e38b",
+		"version": [
+			3,
+			0,
+			0
+		]
+	},
+	"modules": [
+		{
+			"type": "data",
+			"uuid": "ce32587b-189f-4be6-a4b6-7e606abb83dc",
+			"version": [
+				3,
+				0,
+				0
+			]
+		},
+		{
+			"type": "script",
+			"language": "javascript",
+			"uuid": "e22de96f-df07-4828-95c8-7bb0441fff9f",
+			"entry": "scripts/main.js",
+			"version": [
+				3,
+				0,
+				0
+			]
+		}
+	],
+	"dependencies": [
+		{
+			"uuid": "8dfd93cc-a4e2-499b-a445-1fdc7e78d66a",
+			"version": [
+				3,
+				0,
+				0
+			]
+		},
+		{
+			"module_name": "@minecraft/server",
+			"version": "2.4.0"
+		},
+		{
+			"module_name": "@minecraft/server-ui",
+			"version": "2.0.0"
+		}
+	]
+}

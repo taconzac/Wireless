@@ -1,0 +1,58 @@
+{
+	"format_version": "1.21.60",
+	"minecraft:entity": {
+		"description": {
+			"identifier": "wr:chunk_loader",
+			"is_spawnable": false,
+			"is_summonable": true,
+			"is_experimental": false
+		},
+		"components": {
+			"minecraft:type_family": {
+				"family": ["wr_chunk_loader", "inanimate"]
+			},
+			"minecraft:health": {
+				"value": 999999999,
+				"max": 999999999
+			},
+			"minecraft:collision_box": {
+				"width": 0,
+				"height": 0
+			},
+			"minecraft:damage_sensor": {
+				"triggers": {
+					"cause": "all",
+					"deals_damage": false
+				}
+			},
+			"minecraft:fire_immune": true,
+			"minecraft:scale": {
+				"value": 0
+			},
+			"minecraft:knockback_resistance": {
+				"value": 1
+			},
+			"minecraft:physics": {
+				"has_gravity": false
+			},
+			"minecraft:pushable": {
+				"is_pushable": false
+			}
+		},
+		"component_groups": {
+			"wr_loader:active": {
+				"minecraft:tick_world": {
+					"never_despawn": true,
+					"radius": 1
+				}
+			}
+		},
+		"events": {
+			"wr_loader:activate": {
+				"add": {
+					"component_groups": ["wr_loader:active"]
+				}
+			}
+		}
+	}
+}

@@ -1,0 +1,71 @@
+# Changelog
+
+## 3.0.0
+
+Rewrite of the chunk-loading layer only. Everything else — linking, channels,
+filters, transfer logic, inventory behaviour, item/XP vacuuming, fuel,
+range upgrades, redstone modes, models, textures, sounds, UI styling, and
+crafting recipes — is unchanged from v2.5.
+
+### Added
+
+- Silent, automatic, per-transfer chunk loading for a hopper's *destination*
+  containers, built on the same `minecraft:tick_world` entity technique used
+  by the myGen Chunk Loader. No player action, no menu, no commands.
+- `wr:chunk_loader` — an invisible, internal entity (scale 0, no name tag,
+  never player-facing) that carries the `minecraft:tick_world` component
+  while a delivery is in flight or was recently completed.
+- `ChunkLoaderManager.js` — tracks at most one active loader per destination
+  location, reuses it across every hopper that routes there, extends its
+  ~15 second keep-alive on every delivery attempt, and sweeps expired
+  loaders on a 1-second interval.
+- Startup reconciliation: on world load, any `wr:chunk_loader` entities left
+  over from a previous session are purged (a fresh session's loader map is
+  always empty, so any survivor is by definition an orphan), and the legacy
+  `ChunkLoaded` tag is stripped from existing hoppers.
+- `scripts/selfTest.js` — pure-logic regression checks (inventory stacking,
+  chunk-loader key uniqueness) that run once at startup and log to the
+  content log. No GameTest framework and no experimental toggles required.
+
+### Removed
+
+- `/tickingarea` command usage and all `dimension.runCommand("tickingarea …")`
+  calls.
+- The "Chunk Loader (Keep Loaded)" toggle from the System Settings menu.
+- The `ChunkLoaded` entity tag and every UI element that referenced it
+  (dashboard `[⚓ LOADED]` markers, the diagnostics "ANCHOR" line, the
+  linking wizard's anchor marker).
+- `manageTickingArea()` and its two call sites (explosion cleanup, block
+  break cleanup) — hopper destruction no longer needs to tear down a
+  tickingarea, because none is ever created.
+
+### Changed
+
+- Destination containers are no longer assumed to already be loaded.
+  `processDistribution()` now calls `chunkLoaderManager.ensureLoaded()` for
+  a destination immediately before attempting a transfer to it; if the
+  destination chunk isn't ready yet, the existing per-tick retry loop
+  (unchanged) naturally waits and tries again on the next tick, so no item
+  is ever lost, duplicated, or silently dropped.
+- `min_engine_version` raised to `1.21.60` (the documented minimum for
+  `minecraft:tick_world`), and the `@minecraft/server` dependency bumped to
+  `2.4.0`.
+- Manifest header and module UUIDs are unchanged from v2.5, so this ships
+  as an in-place update rather than a new add-on — worlds that already have
+  Wireless Hopper applied pick up 3.0 automatically, with no relinking
+  required. Routing data (`container_0..9`, `containerCount`, filters, fuel,
+  range, etc.) is untouched by this rewrite.
+- Extracted the item-stacking helper into `scripts/InventoryUtils.js` (used
+  by both the vacuum and distribution code paths) and deleted the unused,
+  entirely dead `scripts/vector.js`, whose static-method duplicated the
+  distance/direction math already inlined in `main.js`.
+
+### Known platform limitation
+
+Bedrock's Script API has no non-cheat way to force-load a chunk that no
+player has ever been near (myGen's own admin UI hits this same wall and
+tells the player to travel there manually). Wireless Hopper 3.0 keeps an
+already-reachable destination loaded through a transfer and for ~15s after,
+and it never uses commands to get around this — but it cannot conjure a
+chunk into existence out of nowhere. See the README's Architecture section
+for the full explanation.

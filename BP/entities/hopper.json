@@ -1,0 +1,42 @@
+{
+    "format_version": "1.20.1",
+    "minecraft:entity": {
+      "description": {
+        "identifier": "wr:wireless_hopper",
+        "is_spawnable": false,
+        "is_summonable": true,
+        "is_experimental": false,
+        "properties": {
+          "tank:fuel": {
+            "type": "int",
+            "range": [0, 1500],
+            "default": 0,
+            "client_sync": true
+          }
+        }
+      },
+      "components": {
+        "minecraft:collision_box": {
+          "width": 0,
+          "height": 0.5
+        },
+        "minecraft:scale": {
+          "value": 1
+        },
+        "minecraft:persistent": {
+          "value": true
+        },
+        "minecraft:damage_sensor": {
+          "triggers": {
+            "cause": "all",
+            "deals_damage": false
+          }
+        },
+        "minecraft:nameable": {
+          "always_show": true,
+          "allow_name_tag_renaming": false
+        }
+      }
+    }
+  }
+  
