@@ -2,7 +2,20 @@ import { world, system } from "@minecraft/server";
 import { ModalFormData, ActionFormData } from "@minecraft/server-ui";
 import { chunkLoaderManager, purgeOrphanLoaders } from "./ChunkLoaderManager.js";
 import { addItemsToInventory } from "./InventoryUtils.js";
-import { formatRouteEntry, parseRouteEntry, shortDimName } from "./RouteEntry.js";
+import {
+  formatRouteEntry,
+  parseRouteEntry,
+  shortDimName,
+  normalizeDimensionId,
+} from "./RouteEntry.js";
+import {
+  registerHopper,
+  unregisterHopper,
+  getHoppersForOwner,
+  hasPendingLinks,
+  queuePendingLink,
+  popPendingLinksFor,
+} from "./HopperRegistry.js";
 import { runSelfTests } from "./selfTest.js";
 
 const DIMENSION_NAMES = ["overworld", "nether", "the_end"];
@@ -71,6 +84,81 @@ function getReceivedSignal(block) {
   }
 
   return 0;
+}
+
+// === LINK ESTABLISHMENT ===
+// Shared by both the immediate path (source hopper is live at link time)
+// and the deferred path (source hopper wasn't loaded when the player
+// linked, so a pending link was queued and this runs later from the main
+// tick loop once that specific hopper is seen again). Keeping the
+// recursion/port-limit/duplicate checks in one place means both callers
+// enforce identical rules.
+export function tryEstablishLink(sourceEntity, destDimensionId, destX, destY, destZ) {
+  // Normalized so the recursion check below compares like-for-like
+  // regardless of whether destDimensionId arrived as a fresh live
+  // `Dimension.id` read (the immediate-apply path) or an already-
+  // normalized value out of the registry/pending-link queue (the
+  // deferred-apply path) - see RouteEntry.js's normalizeDimensionId.
+  const sourceDimId = normalizeDimensionId(sourceEntity.dimension.id);
+  destDimensionId = normalizeDimensionId(destDimensionId);
+  const hLoc = sourceEntity.location;
+  const sourceX = Math.floor(hLoc.x);
+  const sourceY = Math.floor(hLoc.y) - 1;
+  const sourceZ = Math.floor(hLoc.z);
+
+  if (
+    destDimensionId === sourceDimId &&
+    destX === sourceX &&
+    destY === sourceY &&
+    destZ === sourceZ
+  ) {
+    return { success: false, reason: "recursion" };
+  }
+
+  const containerCount = sourceEntity.getDynamicProperty("containerCount") || 0;
+  if (containerCount >= 10) {
+    return { success: false, reason: "port_limit" };
+  }
+
+  for (let i = 0; i < containerCount; i++) {
+    const existing = parseRouteEntry(
+      sourceEntity.getDynamicProperty(`container_${i}`),
+      sourceDimId,
+    );
+    if (
+      existing &&
+      existing.dimensionId === destDimensionId &&
+      existing.x === destX &&
+      existing.y === destY &&
+      existing.z === destZ
+    ) {
+      return { success: false, reason: "duplicate" };
+    }
+  }
+
+  // Registration is intentionally just this location string (dimension-
+  // tagged): it's all the ChunkLoaderManager needs later to spin up a
+  // temporary destination loader, in the correct dimension, at delivery
+  // time. There is nothing to place and nothing further to configure -
+  // loading is activated automatically, per-transfer, and never kept on
+  // permanently.
+  const locStr = formatRouteEntry(destDimensionId, destX, destY, destZ);
+  sourceEntity.setDynamicProperty(`container_${containerCount}`, locStr);
+  sourceEntity.setDynamicProperty("containerCount", containerCount + 1);
+  return { success: true };
+}
+
+function linkFailureMessage(reason) {
+  switch (reason) {
+    case "recursion":
+      return "§c[ERROR] Recursion loop detected. Cannot link source input.";
+    case "port_limit":
+      return "§c[ERROR] Port limit reached (10/10).";
+    case "duplicate":
+      return "§c[ERROR] Connection already established.";
+    default:
+      return "§c[ERROR] Could not establish link.";
+  }
 }
 
 // === STARTUP MIGRATION ===
@@ -272,37 +360,28 @@ world.beforeEvents.playerInteractWithBlock.subscribe((ev) => {
     }
 
     system.run(() => {
-      // Search every dimension, not just the player's current one - this is
-      // what actually makes cross-dimensional routing reachable through the
-      // wizard. Without it, a player standing at an Overworld destination
-      // could still only ever pick an Overworld source hopper, no matter
-      // what the routing storage format supports. Same enumeration pattern
-      // showGlobalDashboard() already uses.
-      const myHoppers = [];
-      for (const dimName of DIMENSION_NAMES) {
-        const searchDim = world.getDimension(dimName);
-        for (const h of searchDim.getEntities({ typeId: ENTITY_ID })) {
-          if (h && h.getDynamicProperty("ownerName") === player.name) {
-            myHoppers.push(h);
-          }
-        }
-      }
+      // Read from the persistent registry, not a live entity search. A
+      // hopper in the Nether is essentially never simulated while the
+      // player is standing in the Overworld linking a destination, so a
+      // live dimension.getEntities() scan can never find it - this is what
+      // made cross-dimension sources invisible in the wizard. The registry
+      // tracks every owned hopper's location regardless of current load
+      // state (kept up to date at placement/rename/break, and self-healed
+      // by the main tick loop for pre-existing hoppers).
+      const myHoppers = getHoppersForOwner(player.name);
 
       if (myHoppers.length === 0) {
         player.playSound("note.bass");
         player.sendMessage(
-          `§c[SYSTEM] No owned units found. Ensure units are loaded.`,
+          `§c[SYSTEM] No owned units found. Place a Wireless Hopper first.`,
         );
         return;
       }
 
       const names = myHoppers.map((h, i) => {
-        const customName = h.getDynamicProperty("customName");
-        const displayName = customName ? `§e${customName}§r` : `Unit ${i + 1}`;
-        const dimTag = shortDimName(h.dimension.id);
-        return `${displayName} [${dimTag}] @ ${Math.floor(
-          h.location.x,
-        )},${Math.floor(h.location.y)},${Math.floor(h.location.z)}`;
+        const displayName = h.customName ? `§e${h.customName}§r` : `Unit ${i + 1}`;
+        const dimTag = shortDimName(h.dimensionId);
+        return `${displayName} [${dimTag}] @ ${h.x},${h.y},${h.z}`;
       });
 
       new ModalFormData()
@@ -311,86 +390,63 @@ world.beforeEvents.playerInteractWithBlock.subscribe((ev) => {
         .show(player)
         .then((res) => {
           if (res.canceled) return;
-          const selected = myHoppers[res.formValues[0]];
+          const target = myHoppers[res.formValues[0]];
 
-          if (!selected) {
+          if (!target) {
             player.playSound("note.bass");
             player.sendMessage("§c[ERROR] Target unit not found.");
             return;
           }
 
-          const sourceDimId = selected.dimension.id;
           const destDimId = block.dimension.id;
+          const destX = block.location.x;
+          const destY = block.location.y;
+          const destZ = block.location.z;
 
-          const hLoc = selected.location;
-          const sourceX = Math.floor(hLoc.x);
-          const sourceY = Math.floor(hLoc.y) - 1;
-          const sourceZ = Math.floor(hLoc.z);
+          // Try to find a live entity at the registered location so the
+          // link can be applied immediately - the common case, since the
+          // source is often either in the same dimension the player is
+          // currently standing in, or was just placed moments ago.
+          let liveSource = null;
+          try {
+            liveSource = world
+              .getDimension(target.dimensionId)
+              .getEntities({
+                typeId: ENTITY_ID,
+                location: { x: target.x, y: target.y, z: target.z },
+                maxDistance: 1.5,
+              })[0];
+          } catch (e) {}
 
-          if (
-            destDimId === sourceDimId &&
-            block.location.x === sourceX &&
-            block.location.y === sourceY &&
-            block.location.z === sourceZ
-          ) {
-            player.playSound("note.bass");
-            player.sendMessage(
-              "§c[ERROR] Recursion loop detected. Cannot link source input.",
-            );
-            return;
-          }
-
-          const containerCount =
-            selected.getDynamicProperty("containerCount") || 0;
-          const max = 10;
-
-          if (containerCount >= max) {
-            player.playSound("note.bass");
-            player.sendMessage("§c[ERROR] Port limit reached (10/10).");
-            return;
-          }
-
-          for (let i = 0; i < containerCount; i++) {
-            const existing = parseRouteEntry(
-              selected.getDynamicProperty(`container_${i}`),
-              sourceDimId,
-            );
-            if (
-              existing &&
-              existing.dimensionId === destDimId &&
-              existing.x === block.location.x &&
-              existing.y === block.location.y &&
-              existing.z === block.location.z
-            ) {
+          if (liveSource) {
+            const result = tryEstablishLink(liveSource, destDimId, destX, destY, destZ);
+            if (!result.success) {
               player.playSound("note.bass");
-              player.sendMessage("§c[ERROR] Connection already established.");
+              player.sendMessage(linkFailureMessage(result.reason));
               return;
             }
+
+            player.sendMessage("§a[SUCCESS] Data link established.");
+            player.playSound("random.orb");
+            player.playSound("respawn_anchor.charge");
+            player.dimension.spawnParticle("minecraft:villager_happy", {
+              x: destX + 0.5,
+              y: destY + 1,
+              z: destZ + 0.5,
+            });
+            return;
           }
 
-          // Registration is intentionally just this location string (now
-          // dimension-tagged): it's all the ChunkLoaderManager needs later
-          // to spin up a temporary destination loader, in the correct
-          // dimension, at delivery time. There is nothing to place and
-          // nothing further to configure - loading is activated
-          // automatically, per-transfer, and never kept on permanently.
-          const locStr = formatRouteEntry(
-            destDimId,
-            block.location.x,
-            block.location.y,
-            block.location.z,
+          // Source isn't currently loaded (typical for a genuinely remote
+          // cross-dimension source) - queue it. The main tick loop applies
+          // it, running the same checks above, the next time that specific
+          // hopper is loaded again. No item is ever lost waiting for this:
+          // routing simply doesn't exist yet until the link actually lands.
+          queuePendingLink(target.dimensionId, target.x, target.y, target.z, destDimId, destX, destY, destZ);
+          player.playSound("ui.button.click");
+          player.sendMessage(
+            "§e[SYSTEM] That unit isn't currently loaded. The link will be completed automatically the next time it loads.",
           );
-          selected.setDynamicProperty(`container_${containerCount}`, locStr);
-          selected.setDynamicProperty("containerCount", containerCount + 1);
-
-          player.sendMessage("§a[SUCCESS] Data link established.");
-          player.playSound("random.orb");
-          player.playSound("respawn_anchor.charge");
-          player.dimension.spawnParticle("minecraft:villager_happy", {
-            x: block.location.x + 0.5,
-            y: block.location.y + 1,
-            z: block.location.z + 0.5,
-          });
         });
     });
     return;
@@ -591,10 +647,15 @@ function showRenameMenu(entity, player) {
 
       const newName = r.formValues[0];
 
+      const ownerName = entity.getDynamicProperty("ownerName");
+      const loc = entity.location;
+      const dimId = entity.dimension.id;
+
       if (newName && newName.trim().length > 0) {
         const finalName = newName.trim();
         entity.setDynamicProperty("customName", finalName);
         entity.nameTag = `§e${finalName}§r`;
+        registerHopper(dimId, Math.floor(loc.x), Math.floor(loc.y), Math.floor(loc.z), ownerName, finalName);
         player.playSound("random.anvil_use");
         player.sendMessage(
           `§a[SYSTEM] Unit identifier set to "§e${finalName}§a".`,
@@ -602,6 +663,7 @@ function showRenameMenu(entity, player) {
       } else {
         entity.setDynamicProperty("customName", undefined);
         entity.nameTag = "";
+        registerHopper(dimId, Math.floor(loc.x), Math.floor(loc.y), Math.floor(loc.z), ownerName, null);
         player.playSound("random.break");
         player.sendMessage("§e[SYSTEM] Unit identifier cleared.");
       }
@@ -862,6 +924,34 @@ system.runInterval(() => {
       const block = dim.getBlock(blockLoc);
       if (!block) continue;
 
+      // Registry self-heal: back-fills the persistent hopper registry for
+      // any unit that existed before this feature shipped (or from a
+      // session where the write somehow didn't happen), the first time
+      // it's ever loaded again. Tag-guarded so the JSON read/write only
+      // ever happens once per hopper's lifetime, not every tick.
+      if (!entity.hasTag("Registered")) {
+        registerHopper(
+          dim.id,
+          blockLoc.x,
+          blockLoc.y,
+          blockLoc.z,
+          entity.getDynamicProperty("ownerName"),
+          entity.getDynamicProperty("customName") || null,
+        );
+        entity.addTag("Registered");
+      }
+
+      // Apply any cross-dimension link that was queued while this specific
+      // hopper wasn't loaded (see the LINKING handler). hasPendingLinks()
+      // is a cheap raw-string check, so this costs nothing on the
+      // overwhelming majority of ticks where nothing is queued at all.
+      if (hasPendingLinks()) {
+        const pending = popPendingLinksFor(dim.id, blockLoc.x, blockLoc.y, blockLoc.z);
+        for (const link of pending) {
+          tryEstablishLink(entity, link.destDimensionId, link.destX, link.destY, link.destZ);
+        }
+      }
+
       // REDSTONE CONTROL LOGIC
       const rsMode = entity.getDynamicProperty("rsMode") || 0;
       const power = getReceivedSignal(block);
@@ -1088,10 +1178,12 @@ world.afterEvents.playerPlaceBlock.subscribe((ev) => {
       });
       e.addTag("ShowBoarder");
       e.addTag("Teleportable");
+      e.addTag("Registered");
       e.setDynamicProperty("ownerName", ev.player.name);
       e.setDynamicProperty("CollectRange", DEFAULT_COLLECT_RANGE);
       e.setDynamicProperty("rsMode", 0);
       e.setDynamicProperty("xpMode", false); // Default OFF
+      registerHopper(d.id, l.x, l.y, l.z, ev.player.name, null);
 
       ev.player.playSound("random.orb");
       ev.player.sendMessage("§a[!] Hopper setup complete.");
@@ -1116,6 +1208,10 @@ world.beforeEvents.playerBreakBlock.subscribe((ev) => {
         ev.player.sendMessage("§c[!] Protected.");
         return;
       }
+      const brokenLoc = ev.block.location;
+      const brokenDimId = ev.block.dimension.id;
+      unregisterHopper(brokenDimId, brokenLoc.x, brokenLoc.y, brokenLoc.z);
+
       system.run(() => {
         if (ent) {
           ent.kill();

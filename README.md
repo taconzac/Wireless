@@ -103,35 +103,57 @@ back empty, the item stays put, and the next tick tries again after
 
 ### Cross-dimensional routing
 
-As of 3.2, a hopper can route to a destination in a *different* dimension:
-Overworld↔Nether, Overworld↔End, Nether↔End, alongside ordinary
-same-dimension routing. Two things had to change to make this possible —
-storage format and the linking UI — and neither touches transfer logic,
-chunk loading, filters, or anything else:
+A hopper can route to a destination in a *different* dimension: Overworld↔
+Nether, Overworld↔End, Nether↔End, alongside ordinary same-dimension
+routing. This shipped in two passes — 3.2.0 added the feature, and 3.2.1
+fixed two real bugs found in actual play — neither of which touches
+transfer logic, chunk loading, filters, or anything else.
 
 - **Storage** (`scripts/RouteEntry.js`): `container_N` now stores
   `"dimensionId,x,y,z"` instead of the old dimension-less `"x,y,z"`. The
-  dimension id is exactly the string Bedrock's own `Dimension.id` getter
-  returned for the destination block at link time, so resolving it later
-  is just `world.getDimension(thatSameString)` — no guessing at "overworld"
-  vs "minecraft:overworld" formatting. Old 3-part entries are still read
-  correctly (resolved against whichever dimension the source hopper is
-  currently in, exactly what they always meant) and are never rewritten in
-  place — this is backward compatibility by tolerant reading, not by a
-  migration pass.
-- **Linking wizard**: the source-hopper dropdown used to search only
-  `player.dimension` — so even with dimension-aware storage, a player
-  standing at an Overworld destination could never have picked a Nether
-  hopper as the source, no matter what the storage format supported. It
-  now searches all three dimensions (the same enumeration
-  `showGlobalDashboard()` already used), with each candidate's dimension
-  shown in its label. The destination's dimension is just whatever
-  dimension the player is standing in when they link, same as before.
+  dimension id is *normalized* to the short `overworld`/`nether`/`the_end`
+  form via `normalizeDimensionId()` before it's ever written or compared —
+  not stored as whatever raw string `Dimension.id` happens to return.
+  This matters: 3.2.0 originally stored the raw value on the theory that it
+  would round-trip through `world.getDimension()` unmodified, but in
+  practice `.id` isn't guaranteed to come back in the exact form
+  `world.getDimension()` accepts (e.g. a `"minecraft:"`-prefixed form), and
+  a mismatch made `world.getDimension()` throw inside a try/catch — so the
+  route silently never delivered, with no visible error. Old 3-part
+  (dimension-less) entries are still read correctly (resolved against
+  whichever dimension the source hopper is currently in) and are never
+  rewritten in place. Because normalization happens on *read*, this also
+  self-heals any route already written under the 3.2.0 build automatically
+  — no migration needed.
+- **Discovery** (`scripts/HopperRegistry.js`, new in 3.2.1): the linking
+  wizard's source-hopper dropdown originally searched all three dimensions
+  live via `dimension.getEntities()` — but that can only ever return
+  entities in *currently simulated* chunks. A Nether hopper is essentially
+  never loaded while a player links from the Overworld, so it could never
+  be found this way no matter how many dimensions were searched — this is
+  a hard Bedrock constraint on `getEntities()`, not a bug in the search
+  logic itself. The fix is a small persistent registry (a world dynamic
+  property keyed by dimension+coordinates, holding just owner + custom
+  name) kept up to date at placement/rename/break time and self-healed for
+  pre-existing hoppers the first time the main tick loop sees them again.
+  The dropdown is built from this registry, so every owned hopper is
+  visible regardless of current load state.
+- **Applying a link when the source isn't loaded**: routing data still
+  lives on the source hopper's own dynamic properties (unchanged from
+  v2.5), which needs a live entity to write to. If the selected hopper is
+  live at link time, the link applies immediately (the common case — same
+  dimension, or a hopper just placed moments ago). If not, a small
+  pending-link queue (also in `HopperRegistry.js`) records the intent, and
+  the main tick loop applies it the next time that specific hopper loads,
+  running the exact same recursion/port-limit/duplicate checks via a
+  shared `tryEstablishLink()` helper — no item or link is ever lost
+  waiting for this.
 
-`ChunkLoaderManager.js` required **no changes at all** — its dedupe key was
-already `dimension.id + coordinates`, so a loader was always scoped to its
-destination's own dimension; `processDistribution()` just had to pass it
-the destination's `Dimension` object instead of assuming the source's.
+`ChunkLoaderManager.js` required **no changes at all** in either pass —
+its dedupe key was already `dimension.id + coordinates`, so a loader was
+always scoped to its destination's own dimension; `processDistribution()`
+just had to pass it the destination's `Dimension` object instead of
+assuming the source's.
 
 ### Known Bedrock platform limitation
 
@@ -195,7 +217,7 @@ this is a meaningful test by first running it against the pre-fix code:
 destination crashed `processDistribution()` uncaught, which is the actual
 bug the fix above addresses.
 
-For cross-dimensional routing (3.2), a second harness stood up three
+For cross-dimensional routing (3.2.0), a second harness stood up three
 independent fake dimensions (Overworld/Nether/End, each with its own
 loaded-state, inventory, and loader-entity list) and drove real production
 code through: Overworld→Nether, Nether→Overworld, End→Overworld (with a
@@ -206,6 +228,23 @@ hoppers in two different dimensions routing to the same destination
 sharing exactly one loader, expiry across all three dimensions, and
 orphaned-loader purging in each dimension independently (restart
 compatibility). 16/16 checks passed.
+
+Two real bugs surfaced from actual in-game testing of 3.2.0 (see
+CHANGELOG's 3.2.1 entry). For the fix, I built a harness specifically
+designed to reproduce both: a `world.getDimension()` stub that — like the
+real engine apparently does — only accepts the short dimension-name form,
+while `Dimension.id` returns the `"minecraft:"`-prefixed form (reproducing
+the "established but never transports" bug), and dimensions that can be
+fully unloaded independent of each other (reproducing "can't see the
+Nether hopper from the Overworld"). Against real, exported production code
+(`processDistribution`, `tryEstablishLink`, and every `HopperRegistry.js`
+function) this confirmed: Nether→Nether now actually transports; a Nether
+hopper stays visible via the registry while the Nether dimension is
+completely unloaded; linking to it queues a pending link instead of
+silently failing; and the deferred link is established correctly (running
+the same recursion/port-limit/duplicate checks) and delivers once the
+source hopper loads again. I also re-ran the full 3.2.0 regression suite
+(12 checks) against the fixed code with no regressions.
 
 ### What I could not verify myself
 
@@ -238,12 +277,24 @@ following before relying on this in a real world:
 
 ### Manual tests for cross-dimensional routing (3.2)
 
-- [ ] Overworld → Nether: place a source hopper in the Overworld, travel to
-      the Nether, stand at a chest there and link (the Overworld hopper
-      should appear in the dropdown, tagged `[OW]`). Send an item from the
-      Overworld side; confirm it arrives in the Nether chest.
-- [ ] Nether → Overworld, and End → Overworld: same shape, reversed and
-      from the End.
+- [ ] Same-dimension linking still works and actually transports (this was
+      the 3.2.1 regression — Nether→Nether specifically, but check
+      Overworld→Overworld and End→End too).
+- [ ] Overworld → Nether while the Nether hopper is still loaded (link
+      right after placing it, before it has a chance to unload): place a
+      source hopper in the Nether, immediately travel to an Overworld chest
+      and link (it should appear in the dropdown tagged `[NETHER]` and
+      apply immediately with a success message). Send an item; confirm it
+      arrives.
+- [ ] Overworld → Nether where the Nether hopper has since fully unloaded
+      (placed it a while ago, left, came back another day): confirm it
+      still appears in the dropdown, and that selecting it gives the "not
+      currently loaded — will complete automatically" message instead of
+      silently failing or erroring. Then travel back to that Nether hopper
+      once; confirm the link is now established (check the Routing Table
+      on it) without having done anything else.
+- [ ] Nether → Overworld, and End → Overworld: same two shapes (immediate
+      and deferred), reversed and from the End.
 - [ ] Nether → End direct (no Overworld hop).
 - [ ] A single hopper with both a same-dimension route *and* a
       cross-dimension route configured at once — confirm both deliver

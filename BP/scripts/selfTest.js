@@ -7,7 +7,12 @@
  */
 import { addItemsToInventory } from "./InventoryUtils.js";
 import { keyFor } from "./ChunkLoaderManager.js";
-import { formatRouteEntry, parseRouteEntry, shortDimName } from "./RouteEntry.js";
+import {
+  formatRouteEntry,
+  parseRouteEntry,
+  shortDimName,
+  normalizeDimensionId,
+} from "./RouteEntry.js";
 
 function fakeInventory(size) {
   const slots = new Array(size).fill(null);
@@ -109,15 +114,21 @@ function testChunkLoaderKeysAreUniquePerDimensionAndLocation(failures) {
 }
 
 function testRouteEntryRoundTripsThroughFormatAndParse(failures) {
+  // formatRouteEntry/parseRouteEntry normalize whatever dimension id
+  // spelling they're given down to the short form world.getDimension()
+  // is proven to accept (this is the fix for cross-dimension routes that
+  // established but silently never transported: a "minecraft:"-prefixed
+  // id round-tripped verbatim made world.getDimension() throw, which was
+  // caught and swallowed by the caller's own defensive try/catch).
   const str = formatRouteEntry("minecraft:nether", 123, 64, -456);
   const parsed = parseRouteEntry(str, "minecraft:overworld");
   assert(
     parsed &&
-      parsed.dimensionId === "minecraft:nether" &&
+      parsed.dimensionId === "nether" &&
       parsed.x === 123 &&
       parsed.y === 64 &&
       parsed.z === -456,
-    "route entry: format -> parse round-trips dimension and coordinates exactly",
+    "route entry: format -> parse round-trips coordinates and normalizes the dimension id",
     failures,
   );
 }
@@ -127,11 +138,11 @@ function testRouteEntryFallsBackToSourceDimensionForLegacyEntries(failures) {
   const parsed = parseRouteEntry(legacy, "minecraft:the_end");
   assert(
     parsed &&
-      parsed.dimensionId === "minecraft:the_end" &&
+      parsed.dimensionId === "the_end" &&
       parsed.x === 123 &&
       parsed.y === 64 &&
       parsed.z === -456,
-    "route entry: a dimension-less legacy entry resolves to the caller's fallback dimension",
+    "route entry: a dimension-less legacy entry resolves to the caller's (normalized) fallback dimension",
     failures,
   );
 }
@@ -145,6 +156,29 @@ function testRouteEntryHandlesMissingOrMalformedInput(failures) {
   assert(
     parseRouteEntry("not,enough", "minecraft:overworld") === null,
     "route entry: a malformed entry (wrong part count) parses to null instead of throwing",
+    failures,
+  );
+}
+
+function testNormalizeDimensionIdHandlesEveryRealisticSpelling(failures) {
+  assert(
+    normalizeDimensionId("minecraft:overworld") === "overworld",
+    "normalizeDimensionId: strips the minecraft: prefix",
+    failures,
+  );
+  assert(
+    normalizeDimensionId("nether") === "nether",
+    "normalizeDimensionId: leaves an already-short id unchanged",
+    failures,
+  );
+  assert(
+    normalizeDimensionId("MINECRAFT:THE_END") === "the_end",
+    "normalizeDimensionId: is case-insensitive",
+    failures,
+  );
+  assert(
+    normalizeDimensionId("minecraft:overworld") === normalizeDimensionId("overworld"),
+    "normalizeDimensionId: prefixed and short forms of the same dimension normalize identically (this is the actual fix - a route stored via one spelling must resolve the same way a route stored via the other does)",
     failures,
   );
 }
@@ -176,6 +210,7 @@ export function runSelfTests() {
   testRouteEntryRoundTripsThroughFormatAndParse(failures);
   testRouteEntryFallsBackToSourceDimensionForLegacyEntries(failures);
   testRouteEntryHandlesMissingOrMalformedInput(failures);
+  testNormalizeDimensionIdHandlesEveryRealisticSpelling(failures);
   testShortDimNameCoversAllThreeDimensions(failures);
 
   if (failures.length === 0) {

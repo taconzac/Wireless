@@ -1,5 +1,68 @@
 # Changelog
 
+## 3.2.1
+
+Two real bugs reported from in-game testing of 3.2.0's cross-dimensional
+routing, both fixed.
+
+### Fixed
+
+- **Nether→Nether (and any route) established but never transported, even
+  with both ends loaded.** `Dimension.id` doesn't necessarily come back in
+  a format `world.getDimension()` accepts unmodified (e.g. a
+  `"minecraft:"`-prefixed form) - a route stored with the raw value made
+  `world.getDimension()` throw inside `processDistribution()`, which was
+  silently swallowed by the surrounding try/catch, so the item just sat
+  there forever with no visible error. `RouteEntry.js` now exports
+  `normalizeDimensionId()`, applied inside `formatRouteEntry()` and
+  `parseRouteEntry()`, that collapses any spelling down to the short
+  `overworld`/`nether`/`the_end` form this codebase has used successfully
+  with `world.getDimension()` since v2.5. Because normalization happens on
+  *read*, this also self-heals any route already written under the buggy
+  3.2.0 build - no migration needed, existing broken links start working
+  the next time they're read.
+- **A hopper in a different dimension never appeared in the linking
+  wizard's dropdown** ("no option to connect chest to nether thing, doesn't
+  show"). The wizard searched all three dimensions live
+  (`dimension.getEntities()`), but that can only ever return entities in
+  *currently simulated* chunks - a Nether hopper is essentially never
+  loaded while the player links from the Overworld, so it could never be
+  found this way regardless of how many dimensions were searched. Fixed
+  with a new persistent registry (`HopperRegistry.js`, a world dynamic
+  property keyed by dimension+coordinates) that's independent of load
+  state:
+  - Updated at placement, rename, and break time; self-healed (registered
+    exactly once, tag-guarded) for pre-existing hoppers the first time the
+    main tick loop sees them again after upgrading.
+  - The wizard's dropdown is now built from this registry, so every owned
+    hopper is visible regardless of which dimension is currently loaded.
+  - Actually *writing* a route still needs a live entity (routing data
+    stays on the source hopper's own dynamic properties, unchanged). If the
+    selected hopper is live, the link applies immediately exactly as
+    before. If not, a small pending-link queue records the intent, and the
+    main tick loop applies it (running the identical recursion/port-limit/
+    duplicate checks via a new shared `tryEstablishLink()` helper) the next
+    time that specific hopper is loaded. No item or link is ever lost
+    waiting for this.
+
+### Changed
+
+- Extracted the recursion-loop/port-limit/duplicate-connection checks that
+  used to live only in the linking wizard's callback into
+  `tryEstablishLink()`, shared by both the immediate-apply and deferred-
+  apply paths, so both enforce identical rules instead of duplicating the
+  logic.
+
+Verified against real production code with a dedicated harness that
+reproduces both original bugs against the pre-fix behavior (a strict
+`world.getDimension()` stub that only accepts the short form, and
+dimensions that go fully unloaded) and confirms the fixed code: Nether→
+Nether actually transports, a Nether hopper is visible via the registry
+while the Nether is completely unloaded, linking to it queues a pending
+link instead of silently failing, and the deferred link is established and
+delivers correctly once the source loads again. Also re-ran the full 3.2.0
+cross-dimension regression suite (12 checks) with no regressions.
+
 ## 3.2.0
 
 ### Added
