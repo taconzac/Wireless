@@ -224,15 +224,17 @@ system.runInterval(() => {
 }, 20);
 
 // === CHUNK LOADER BORDER (myGen Chunk Loader integration) ===
-// Simply holding the wrench - anywhere, not tied to interacting with a
-// specific chunk loader block - shows the border of every chunk currently
-// loaded around the player's own position (their current chunk plus the
-// configured radius out from there). Throttled per-player so it doesn't
-// spam every tick. Mirrors BedrockChunkVisualizer's own original trigger
-// (continuously checking every player, once per throttle window) with the
-// wrench standing in for its "named compass" condition.
+// Holding the wrench - no block interaction needed - shows the border of
+// an actual chunk loader's facility, if the player is currently standing
+// within one: the loader's own chunk first, then the chunks surrounding
+// it out to the configured radius. Never shows anything for a player just
+// standing in the open with no loader anywhere nearby - this is meant to
+// reveal a facility's actual reach, not just "whatever chunk you're in".
+// Throttled per-player. Mirrors BedrockChunkVisualizer's own original
+// trigger (continuously checking every player, once per throttle window),
+// with the wrench standing in for its "named compass" condition.
 const CHUNK_BORDER_INTERVAL_TICKS = 60; // ~3 seconds
-const lastChunkBorderShown = new Map(); // player.id -> tick last shown
+const lastChunkBorderShown = new Map(); // player.id -> tick last checked
 
 system.runInterval(() => {
   for (const player of world.getPlayers()) {
@@ -241,17 +243,37 @@ system.runInterval(() => {
       const held = inventory?.container?.getItem(player.selectedSlotIndex);
       if (held?.typeId !== WRENCH_ID) continue;
 
-      // -Infinity, not 0, for "never shown yet" - system.currentTick is
+      // -Infinity, not 0, for "never checked yet" - system.currentTick is
       // itself 0 right at world load, so 0 would wrongly look identical
-      // to "already shown at tick 0" and skip the very first check.
+      // to "already checked at tick 0" and skip the very first check.
       const last = lastChunkBorderShown.get(player.id) ?? -Infinity;
       if (system.currentTick - last < CHUNK_BORDER_INTERVAL_TICKS) continue;
       lastChunkBorderShown.set(player.id, system.currentTick);
 
-      const chunkX = Math.floor(player.location.x / 16);
-      const chunkZ = Math.floor(player.location.z / 16);
       const radius = mygenChunkLoaderManager.getConfig().defaultRadius ?? 4;
-      chunkLoaderBorder.renderChunkBorders(player, chunkX, chunkZ, radius);
+      const playerChunkX = Math.floor(player.location.x / 16);
+      const playerChunkZ = Math.floor(player.location.z / 16);
+
+      // Find the nearest loader, in the player's current dimension, whose
+      // facility (its own chunk + radius out) actually covers where the
+      // player is standing.
+      let nearest = null;
+      let nearestDistSq = Infinity;
+      for (const loader of mygenChunkLoaderManager.getAllChunkLoaders()) {
+        if (loader.dimension !== player.dimension.id) continue;
+        const loaderChunkX = Math.floor(loader.location.x / 16);
+        const loaderChunkZ = Math.floor(loader.location.z / 16);
+        if (Math.abs(playerChunkX - loaderChunkX) > radius) continue;
+        if (Math.abs(playerChunkZ - loaderChunkZ) > radius) continue;
+        const distSq = (playerChunkX - loaderChunkX) ** 2 + (playerChunkZ - loaderChunkZ) ** 2;
+        if (distSq < nearestDistSq) {
+          nearestDistSq = distSq;
+          nearest = { chunkX: loaderChunkX, chunkZ: loaderChunkZ };
+        }
+      }
+      if (!nearest) continue;
+
+      chunkLoaderBorder.renderChunkBorders(player, nearest.chunkX, nearest.chunkZ, radius);
     } catch (e) {}
   }
 }, CHUNK_BORDER_INTERVAL_TICKS);

@@ -1,5 +1,32 @@
 # Changelog
 
+## 3.3.5
+
+Close, per feedback: 3.3.4 showed a border around whatever chunk the
+player happened to be standing in, regardless of whether an actual chunk
+loader was anywhere nearby. It should only ever highlight a real
+facility - the loader's own chunk first, then the chunks around it out to
+the configured radius.
+
+### Changed
+
+- The passive wrench check now looks up every registered chunk loader
+  (`mygenChunkLoaderManager.getAllChunkLoaders()`) in the player's current
+  dimension, and only renders a border if the player is actually standing
+  within one's coverage area (its own chunk, out to the configured radius
+  in every direction). If no loader's facility covers where the player is
+  standing, nothing is shown at all - it no longer draws a border around
+  an arbitrary empty chunk.
+- The border is now always centered on the matched loader's own chunk,
+  not the player's - so standing anywhere inside a facility shows the
+  same, correctly-anchored border, not one that shifts around based on
+  exactly where in the facility the player happens to be. If a player is
+  within range of more than one loader, the nearest one is used.
+- Verified with an isolated test: a player far from any loader sees
+  nothing; a player standing in a chunk *adjacent* to (not on top of) a
+  registered loader, within its radius, sees the border correctly
+  centered on the loader's own chunk rather than the player's.
+
 ## 3.3.4
 
 Feedback on 3.3.3: semi-working, but the trigger shouldn't be "interact
