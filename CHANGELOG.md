@@ -1,5 +1,49 @@
 # Changelog
 
+## 3.3.7 - Reverts 3.3.6, adds a real vacuum toggle instead
+
+3.3.6 was reported to cause serious regressions: dropped items just
+deleting instead of going anywhere, and repeated instant death on respawn
+in survival. Given the severity, 3.3.6's change is fully reverted -
+`BP/scripts/main.js` is byte-for-byte back to its 3.3.5 state for that
+section - rather than risk trying to patch it further without being able
+to reproduce the new symptoms myself.
+
+The most likely explanation: 3.3.6 killed a wireless hopper's entity the
+instant its own block-typeId check didn't match `BLOCK_ID`, on the theory
+that only a truly orphaned entity would ever see a mismatch. But that
+check used the entity's *current* floor()'d position - and if a hopper
+entity's position ever drifts by even a fraction of a block for any
+reason, that rounds to the wrong Y and the check would compare against
+the block *below* the hopper (its container) instead of the hopper
+itself, incorrectly treating a perfectly normal, working hopper as an
+orphan and killing it. That would explain both symptoms at once across a
+world with many hoppers: routing breaking wholesale (matches "items just
+delete"), and enough entities being destroyed across enough chunks in one
+tick to plausibly cause other instability. This is a hypothesis, not a
+confirmed root cause - which is exactly why reverting outright, rather
+than tweaking the same mechanism again, is the right call here.
+
+### Changed
+
+- Reverted 3.3.6's block-typeId check and entity-kill logic entirely.
+- Added what was actually asked for instead: a genuine per-hopper "Item
+  Vacuum" toggle in the wireless hopper's own System Kernel config menu,
+  next to the existing XP Vacuum toggle. Defaults to **on** (matching all
+  prior versions) so no existing setup changes behavior on update: nobody
+  has to visit every hopper to keep their current setup working. Anyone
+  who doesn't want a specific hopper auto-collecting nearby dropped items
+  can now turn it off for that hopper individually - it was never
+  possible to disable this before at all.
+- This only ever affects the wireless hopper's own item-vacuum step,
+  gated behind the wireless hopper's own dynamic property - it has no
+  effect on any other container, exactly as asked.
+- Verified with isolated tests: vacuum still defaults on for hoppers that
+  predate this setting, can be explicitly turned off (item is left alone,
+  nothing enters the container below), and can be turned back on;
+  Wireless Hopper's own cross-dimensional transport logic is unaffected
+  by either the revert or the new toggle.
+
 ## 3.3.6
 
 Reported and reproduced: a plain chest, with no wireless hopper anywhere

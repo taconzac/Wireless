@@ -835,6 +835,7 @@ function showConfig(entity, player) {
   const distMode = entity.getDynamicProperty("distMode") || 0;
   const rsMode = entity.getDynamicProperty("rsMode") || 0;
   const xpState = entity.getDynamicProperty("xpMode") ?? false;
+  const vacuumState = entity.getDynamicProperty("vacuumEnabled") ?? true;
 
   const fullState = entity.hasTag("FullNotification");
   const teleState = entity.hasTag("Teleportable");
@@ -850,6 +851,7 @@ function showConfig(entity, player) {
     .toggle("§cAnti-Break Security", { defaultvalue: antiState })
     .toggle("§cVoid Overflow Items", { defaultvalue: trashState })
     .toggle("§eXP Vacuum Mode", { defaultvalue: xpState })
+    .toggle("§bItem Vacuum", { defaultvalue: vacuumState })
     .dropdown(
       "Distribution Mode",
       ["Round Robin (Even Split)", "Fill First (Sequential)"],
@@ -871,7 +873,7 @@ function showConfig(entity, player) {
         return;
       }
 
-      const [full, tele, border, anti, trash, xpMode, dist, newRsMode] =
+      const [full, tele, border, anti, trash, xpMode, vacuumEnabled, dist, newRsMode] =
         formValues;
 
       full
@@ -885,6 +887,7 @@ function showConfig(entity, player) {
       entity.setDynamicProperty("distMode", dist);
       entity.setDynamicProperty("rsMode", newRsMode);
       entity.setDynamicProperty("xpMode", xpMode);
+      entity.setDynamicProperty("vacuumEnabled", vacuumEnabled);
 
       if (border)
         showRangeBorder(
@@ -1093,28 +1096,6 @@ system.runInterval(() => {
       }
       if (!block) continue;
 
-      // This entity carries every dynamic property and runs all of a
-      // wireless hopper's logic, but the block at its own position was
-      // never actually confirmed to BE the wireless hopper block - only
-      // that *some* block exists there. If the real block is ever gone
-      // (however that happens - an explosion edge case, or anything else
-      // that removes it without going through the break handler that
-      // normally kills this entity too) and something else later occupies
-      // that same position - even an ordinary chest - this enity would
-      // silently keep treating that unrelated block as its own hopper:
-      // still vacuuming nearby dropped items, still delivering them into
-      // whatever's directly below THAT block. Confirmed exactly this way:
-      // a plain chest with no wireless hopper anywhere near it still
-      // showed the vacuum particle and fed a chest below it. Self-heals by
-      // killing the entity the moment its block turns out not to match,
-      // instead of silently adopting whatever's there.
-      if (block.typeId !== BLOCK_ID) {
-        try {
-          entity.kill();
-        } catch (e) {}
-        continue;
-      }
-
       // REDSTONE CONTROL LOGIC
       const rsMode = entity.getDynamicProperty("rsMode") || 0;
       const power = getReceivedSignal(block);
@@ -1149,6 +1130,9 @@ system.runInterval(() => {
       const filters = filterString ? filterString.split(",") : [];
       const isWhitelist = entity.getDynamicProperty("isWhitelist") ?? false;
       const xpMode = entity.getDynamicProperty("xpMode") ?? false;
+      // Defaults true so hoppers placed before this setting existed keep
+      // their current (vacuum-on) behavior unchanged.
+      const vacuumEnabled = entity.getDynamicProperty("vacuumEnabled") ?? true;
 
       // A hopper placed near a dimension's height floor/ceiling (the
       // Nether's usable range is roughly Y 0-127) can have its own
@@ -1202,7 +1186,7 @@ system.runInterval(() => {
         }
       }
 
-      if (inventory) {
+      if (inventory && vacuumEnabled) {
         for (const itemEntity of items) {
           if (!itemEntity) continue;
           const itemStack = itemEntity.getComponent("item").itemStack;
