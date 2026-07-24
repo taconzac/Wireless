@@ -835,7 +835,6 @@ function showConfig(entity, player) {
   const distMode = entity.getDynamicProperty("distMode") || 0;
   const rsMode = entity.getDynamicProperty("rsMode") || 0;
   const xpState = entity.getDynamicProperty("xpMode") ?? false;
-  const vacuumState = entity.getDynamicProperty("vacuumEnabled") ?? true;
 
   const fullState = entity.hasTag("FullNotification");
   const teleState = entity.hasTag("Teleportable");
@@ -851,7 +850,6 @@ function showConfig(entity, player) {
     .toggle("§cAnti-Break Security", { defaultvalue: antiState })
     .toggle("§cVoid Overflow Items", { defaultvalue: trashState })
     .toggle("§eXP Vacuum Mode", { defaultvalue: xpState })
-    .toggle("§bItem Vacuum", { defaultvalue: vacuumState })
     .dropdown(
       "Distribution Mode",
       ["Round Robin (Even Split)", "Fill First (Sequential)"],
@@ -873,7 +871,7 @@ function showConfig(entity, player) {
         return;
       }
 
-      const [full, tele, border, anti, trash, xpMode, vacuumEnabled, dist, newRsMode] =
+      const [full, tele, border, anti, trash, xpMode, dist, newRsMode] =
         formValues;
 
       full
@@ -887,7 +885,6 @@ function showConfig(entity, player) {
       entity.setDynamicProperty("distMode", dist);
       entity.setDynamicProperty("rsMode", newRsMode);
       entity.setDynamicProperty("xpMode", xpMode);
-      entity.setDynamicProperty("vacuumEnabled", vacuumEnabled);
 
       if (border)
         showRangeBorder(
@@ -1115,24 +1112,11 @@ system.runInterval(() => {
         continue;
       }
 
-      // === 1. COLLECT & VACUUM ===
+      // === 1. COLLECT ===
       const range =
         entity.getDynamicProperty("CollectRange") || DEFAULT_COLLECT_RANGE;
 
-      // === 1a. ITEM VACUUM ===
-      const items = dim.getEntities({
-        type: "minecraft:item",
-        location: entity.location,
-        maxDistance: range,
-      });
-
-      const filterString = entity.getDynamicProperty("filterList") || "";
-      const filters = filterString ? filterString.split(",") : [];
-      const isWhitelist = entity.getDynamicProperty("isWhitelist") ?? false;
       const xpMode = entity.getDynamicProperty("xpMode") ?? false;
-      // Defaults true so hoppers placed before this setting existed keep
-      // their current (vacuum-on) behavior unchanged.
-      const vacuumEnabled = entity.getDynamicProperty("vacuumEnabled") ?? true;
 
       // A hopper placed near a dimension's height floor/ceiling (the
       // Nether's usable range is roughly Y 0-127) can have its own
@@ -1183,46 +1167,6 @@ system.runInterval(() => {
             // Keep them neat at the center
             orb.teleport(hopperCenter);
           }
-        }
-      }
-
-      if (inventory && vacuumEnabled) {
-        for (const itemEntity of items) {
-          if (!itemEntity) continue;
-          const itemStack = itemEntity.getComponent("item").itemStack;
-
-          const inList = filters.includes(itemStack.typeId);
-          if (isWhitelist && !inList) continue;
-          if (!isWhitelist && inList) continue;
-
-          const dist = getDistance(hopperCenter, itemEntity.location);
-
-          if (dist > 1.5) {
-            const dir = getDirection(itemEntity.location, hopperCenter);
-            if (itemEntity.location.y < hopperCenter.y) {
-              dir.y += 0.1;
-            }
-            const velocity = { x: dir.x * 0.8, y: dir.y * 0.8, z: dir.z * 0.8 };
-
-            try {
-              itemEntity.applyImpulse(velocity);
-            } catch (e) {}
-            continue;
-          }
-
-          try {
-            dim.spawnParticle(
-              "minecraft:eyeofender_death_explode_particle",
-              itemEntity.location,
-            );
-            const left = addItemsToInventory(
-              inventory,
-              itemStack,
-              itemStack.amount,
-            );
-
-            if (left === 0) itemEntity.remove();
-          } catch (e) {}
         }
       }
 

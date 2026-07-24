@@ -1,5 +1,45 @@
 # Changelog
 
+## 3.3.8 - Item vacuum removed entirely
+
+Reported: the item deletion / instant-death-on-respawn problems were
+still happening even on 3.3.7, which had already fully reverted 3.3.6's
+change back to 3.3.5's exact behavior (item vacuum always on, no
+orphan-kill logic at all). That means 3.3.6 was never actually the cause
+- whatever's wrong is something else, still present even in plain
+unmodified 3.3.5-equivalent code.
+
+### Removed
+
+- The item vacuum feature (pulling nearby dropped items into a wireless
+  hopper's own container) is removed entirely - not toggled off, not
+  gated, the code path is gone. This includes the per-hopper "Item
+  Vacuum" toggle added in 3.3.7, since there's nothing left for it to
+  toggle.
+- **What still works exactly as before**: cross-dimensional routing and
+  delivery (a hopper still moves whatever's already sitting in its own
+  container to its configured destinations), redstone control, XP vacuum
+  (a separate, already-toggleable feature, untouched), filters, range
+  upgrades, and everything else. The only change is that a wireless
+  hopper no longer reaches out and auto-collects dropped items lying on
+  the ground near it - items now have to be placed into its container
+  directly (by a real vanilla hopper, a dispenser, a player, etc.), same
+  as any other container-based setup.
+- Verified with an isolated test: a dropped item sitting directly next to
+  a wireless hopper is now left completely untouched (no particle, no
+  pull, no removal, no insertion), while routing/delivery for items
+  already in the container is unaffected.
+
+### If this doesn't fix it
+
+Since the problem persisted through a full revert to 3.5-equivalent
+code, item vacuum was likely never the actual cause - it was simply what
+was reported and reachable to remove. If the item deletion or death loop
+continues even now, the real cause is somewhere else entirely (possibly
+outside this addon, or in a different part of it - the chunk loader
+merge, farm emulation, or something else), and needs a different,
+narrower investigation rather than removing more features by guess.
+
 ## 3.3.7 - Reverts 3.3.6, adds a real vacuum toggle instead
 
 3.3.6 was reported to cause serious regressions: dropped items just
