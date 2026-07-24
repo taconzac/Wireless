@@ -1,5 +1,42 @@
 # Changelog
 
+## 3.3.6
+
+Reported and reproduced: a plain chest, with no wireless hopper anywhere
+near it, showed the hopper's purple vacuum particle and fed dropped items
+into a chest below it. Minimal repro confirmed it: two plain chests
+stacked, no hopper at all - break the top one and its contents go
+straight into the bottom one.
+
+### Fixed
+
+- Found it: the main loop's own-block lookup only ever checked that *a*
+  block existed at the wireless hopper entity's position
+  (`if (!block) continue`) - it never checked that block was actually
+  `BLOCK_ID` (the real wireless hopper block). The entity itself carries
+  every dynamic property and runs all the tick logic, so if it ever
+  survives without its real block still there (an explosion edge case, or
+  anything else that removes the block without going through the normal
+  break handler that kills this entity too), it would silently keep
+  running - treating whatever block now occupies that position as if it
+  *were* its own hopper, vacuuming nearby items and delivering them into
+  whatever's directly below that unrelated block. That's exactly the
+  reported symptom: an orphaned entity sitting where a plain chest now is
+  will vacuum into whatever chest is below it, with nothing visibly
+  wireless-hopper-shaped anywhere in sight.
+- Added the missing `block.typeId !== BLOCK_ID` check, and self-heals:
+  the moment a mismatch is detected, the orphaned entity is killed
+  immediately rather than left to keep silently adopting whatever block
+  happens to be there.
+- Verified with an isolated test reproducing the exact reported scenario
+  (an orphaned entity positioned where a plain chest sits, with another
+  chest below and a dropped item nearby): confirms the entity is killed
+  and neither the vacuum particle nor any item transfer happens. A
+  negative control (temporarily removing just the new check) confirms
+  the test actually catches the bug. A separate test confirms a
+  legitimate, correctly-matched wireless hopper is unaffected and still
+  delivers normally.
+
 ## 3.3.5
 
 Close, per feedback: 3.3.4 showed a border around whatever chunk the

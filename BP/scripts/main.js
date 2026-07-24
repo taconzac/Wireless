@@ -1093,6 +1093,28 @@ system.runInterval(() => {
       }
       if (!block) continue;
 
+      // This entity carries every dynamic property and runs all of a
+      // wireless hopper's logic, but the block at its own position was
+      // never actually confirmed to BE the wireless hopper block - only
+      // that *some* block exists there. If the real block is ever gone
+      // (however that happens - an explosion edge case, or anything else
+      // that removes it without going through the break handler that
+      // normally kills this entity too) and something else later occupies
+      // that same position - even an ordinary chest - this enity would
+      // silently keep treating that unrelated block as its own hopper:
+      // still vacuuming nearby dropped items, still delivering them into
+      // whatever's directly below THAT block. Confirmed exactly this way:
+      // a plain chest with no wireless hopper anywhere near it still
+      // showed the vacuum particle and fed a chest below it. Self-heals by
+      // killing the entity the moment its block turns out not to match,
+      // instead of silently adopting whatever's there.
+      if (block.typeId !== BLOCK_ID) {
+        try {
+          entity.kill();
+        } catch (e) {}
+        continue;
+      }
+
       // REDSTONE CONTROL LOGIC
       const rsMode = entity.getDynamicProperty("rsMode") || 0;
       const power = getReceivedSignal(block);
